@@ -36,27 +36,33 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 		WriteTimeout: r.Timeout(),
 	}
 
-	qname := req.Question[0].Name
-
 	res := make(chan *dns.Msg, 1)
 	var wg sync.WaitGroup
-	L := func(nameserver string) {
+	L := func(nameserver, qname string) {
 		defer wg.Done()
+		log.Printf("lookuping %s on %s\n", qname, nameserver)
+
 		r, _, err := c.Exchange(req, nameserver)
 		if err != nil {
-			log.Printf("failed to exchange with %s for %s: %s\n", nameserver, qname, err)
+			log.Printf("failed to exchange with %s for %s: %s\n",
+				nameserver, qname, err)
 			return
 		}
 		if r != nil && r.Rcode != dns.RcodeSuccess {
-			log.Printf("failed to get an valid answer from %s for %s\n", nameserver, qname)
-			if r.Rcode == dns.RcodeServerFailure {
+			log.Printf("failed to get an valid answer for %s on %s, rcode:%s\n",
+				qname, nameserver, dns.RcodeToString[r.Rcode])
+			return
+		} else {
+			if checkFakeIP(r) {
+				log.Printf("%s resolve on %s hit fakeip cache: %s\n",
+					qname, nameserver, r)
 				return
 			}
-		} else {
-			log.Printf("%s resolv on %s (%s)\n", UnFqdn(qname), nameserver, net)
 		}
+
 		select {
 		case res <- r:
+			log.Printf("%s resolv on %s (%s)\n", qname, nameserver, net)
 		default:
 		}
 	}
@@ -64,10 +70,11 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 	ticker := time.NewTicker(time.Duration(gConfig.Interval) * time.Millisecond)
 	defer ticker.Stop()
 
+	qname := req.Question[0].Name
 	// Start lookup on each nameserver top-down, in every second
-	for _, nameserver := range r.Nameservers() {
+	for _, ns := range r.Nameservers() {
 		wg.Add(1)
-		go L(nameserver)
+		go L(ns, qname)
 		// but exit early, if we have an answer
 		select {
 		case r := <-res:

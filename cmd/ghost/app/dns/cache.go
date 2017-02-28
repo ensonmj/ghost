@@ -233,8 +233,10 @@ func (c *MemoryQuestionCache) Length() int {
 }
 
 var (
-	// BlockCache contains all blocked domains
+	// gBlockCache contains all blocked domains
 	gBlockCache = &MemoryBlockCache{Backend: make(map[string]bool)}
-	// QuestionCache contains all queries to the dns server
+	// gFakeIPCache contains all fake ips
+	gFakeIPCache = &MemoryBlockCache{Backend: make(map[string]bool)}
+	// gQuestionCache contains all queries to the dns server
 	gQuestionCache = &MemoryQuestionCache{Backend: make([]QuestionCacheEntry, 0), Maxcount: 1000}
 )

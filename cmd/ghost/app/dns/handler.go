@@ -92,6 +92,9 @@ func (h *DNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 				dns.HandleFailed(w, req)
 				return
 			}
+		} else if checkFakeIP(mesg) {
+			log.Printf("remove fakeip for %s from cache: %s\n", Q, mesg)
+			h.cache.Remove(key)
 		} else {
 			if blocked {
 				log.Printf("%s hit blocked cache\n", Q)

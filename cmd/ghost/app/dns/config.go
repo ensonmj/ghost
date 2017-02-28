@@ -25,6 +25,7 @@ type config struct {
 	Maxcount         int
 	QuestionCacheCap int
 	TTL              uint32
+	FakeInterval     int
 }
 
 var defaultConfig = `# list of sources to pull blocklists from, stores them in sourcedir
@@ -74,7 +75,7 @@ nameservers = [
 interval = 200
 
 # query timeout for dns lookups in seconds
-timeout = 5
+timeout = 60
 
 # cache entry lifespan in seconds
 expire = 600
@@ -84,6 +85,9 @@ maxcount = 0
 
 # question cache capacity, 0 for infinite but not recommended (this is used for storing logs)
 questioncachecap = 5000
+
+# interval for fake ip lookups in second
+fakeInterval = 30
 `
 
 // Config is the global configuration

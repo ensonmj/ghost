@@ -37,6 +37,8 @@ func dnsMain(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	dns.UpdateFakeIP("114.114.114.114:53")
+
 	dns.StartAPIServer(viper.GetBool("debug"))
 	dns.NewServer(5*time.Second, 5*time.Second).Run()
 
