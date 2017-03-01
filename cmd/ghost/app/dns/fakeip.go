@@ -25,6 +25,13 @@ func UpdateFakeIP(nameserver string) {
 		Qclass: uint16(dns.ClassINET),
 	}
 
+	for _, ip := range gConfig.FakeIps {
+		if !gFakeIPCache.Exists(ip) {
+			gFakeIPCache.Set(ip, true)
+			log.Printf("add cold fake ip:%s\n", ip)
+		}
+	}
+
 	go func() {
 		tInterval := time.NewTicker(time.Duration(gConfig.FakeInterval) * time.Second)
 		defer tInterval.Stop()

@@ -29,6 +29,7 @@ type config struct {
 	QuestionCacheCap int
 	TTL              uint32
 	FakeInterval     int
+	FakeIps          []string
 }
 
 var defaultConfig = `# list of sources to pull blocklists from, stores them in sourcedir
@@ -102,8 +103,6 @@ chnameservers = [
 
 # nameservers for ISP or enterprise network, maybe null
 ispnameservers = [
-	"172.18.52.2:53",
-	"172.18.52.66:53"
 ]
 
 # concurrency interval for lookups in miliseconds
