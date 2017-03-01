@@ -93,7 +93,7 @@ func (h *DNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 				return
 			}
 		} else if checkFakeIP(mesg) {
-			log.Printf("remove fakeip for %s from cache: %s\n", Q, mesg)
+			log.Printf("remove fakeip for %s from cache\n", Q)
 			h.cache.Remove(key)
 		} else {
 			if blocked {
@@ -156,7 +156,6 @@ func (h *DNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 
 	mesg, err := h.resolver.Lookup(Net, req)
 	if err != nil {
-		log.Printf("failed to resolve query %s: %s\n", Q, err)
 		dns.HandleFailed(w, req)
 
 		// cache the failure, too!

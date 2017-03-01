@@ -16,8 +16,6 @@ import (
 
 // LoadData loads the BlockCache
 func LoadData(forceupdate bool) error {
-	log.Printf("loading blocked domains from %s\n", gConfig.SourceDir)
-
 	if _, err := os.Stat(gConfig.SourceDir); os.IsNotExist(err) {
 		if err := os.Mkdir(gConfig.SourceDir, 0700); err != nil {
 			return errors.Wrapf(err, "failed to create source directory: %s",
@@ -34,6 +32,7 @@ func LoadData(forceupdate bool) error {
 		gBlockCache.Set(entry, true)
 	}
 
+	log.Printf("loading blocked domains from %s\n", gConfig.SourceDir)
 	for _, uri := range gConfig.Sources {
 		u, _ := url.Parse(uri)
 		fileName := fmt.Sprintf("%s%s", u.Host, strings.Replace(u.Path, "/", "-", -1))
@@ -49,7 +48,6 @@ func LoadData(forceupdate bool) error {
 			return err
 		}
 	}
-
 	log.Printf("%d domains loaded from sources\n", gBlockCache.Length())
 
 	return nil

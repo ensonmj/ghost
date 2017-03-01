@@ -194,7 +194,7 @@ func (c *MemoryBlockCache) Length() int {
 func (c *MemoryBlockCache) Items() []string {
 	var items []string
 	c.mu.RLock()
-	for key, _ := range c.Backend {
+	for key := range c.Backend {
 		items = append(items, key)
 	}
 	c.mu.RUnlock()

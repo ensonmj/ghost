@@ -68,6 +68,7 @@ func checkFakeIP(m *dns.Msg) bool {
 		case *dns.A:
 			ip := t.A.String()
 			if gFakeIPCache.Exists(ip) {
+				log.Printf("%s hit fake ip cache:%s\n", ip, m)
 				return true
 			}
 		}

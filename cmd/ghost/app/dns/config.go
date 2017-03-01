@@ -19,8 +19,11 @@ type config struct {
 	Nullroute        string
 	Nullroutev6      string
 	Nameservers      []string
+	CHNameservers    []string
+	ISPNameservers   []string
 	Interval         int
 	Timeout          int
+	SessionTimeout   int
 	Expire           int
 	Maxcount         int
 	QuestionCacheCap int
@@ -64,21 +67,56 @@ nullroute = "0.0.0.0"
 # ipv6 address to forward blocked queries to
 nullroutev6 = "0:0:0:0:0:0:0:0"
 
-# nameservers to forward queries to
+# nameservers(not in China) to forward queries to
 nameservers = [
+	"208.67.222.222:443", # opendns
+	"208.67.222.222:5353", # opendns
+	"208.67.220.220:443", # opendns
+	"208.67.220.123:443",
+	"80.90.43.162:5678",
+	"113.20.6.2:443",
+	"113.20.8.17:443",
+	"95.141.34.162:5678",
+	"77.66.84.233:443",
+	"176.56.237.171:443",
+	"142.4.204.111:443",
+	"178.216.201.222:2053",
+	"8.8.8.8:53", # google
+	"8.8.4.4:53", # google
+	"208.67.222.222:53", # opendns
+	"208.67.220.220:53", # opendns
+	"74.82.42.42:53" # he
+]
+
+# nameservers in China
+chnameservers = [
 	"1.2.4.8:53",
-	"8.8.8.8:53",
-	"8.8.4.4:53"
+	"210.2.4.8:53",
+	"114.114.114.114:53",
+	"114.114.115.115:53",
+	"182.254.116.116:53",
+	"182.254.118.118:53",
+	"223.5.5.5:53",
+	"223.6.6.6:53"
+]
+
+# nameservers for ISP or enterprise network, maybe null
+ispnameservers = [
+	"172.18.52.2:53",
+	"172.18.52.66:53"
 ]
 
 # concurrency interval for lookups in miliseconds
 interval = 200
 
-# query timeout for dns lookups in seconds
-timeout = 60
+# timeout for one dns lookup message in seconds
+timeout = 10
+
+# timeout for one dns lookup session(one message for on target) in seconds
+sessiontimeout = 30
 
 # cache entry lifespan in seconds
-expire = 600
+expire = 3600
 
 # cache capacity, 0 for infinite
 maxcount = 0
@@ -86,8 +124,20 @@ maxcount = 0
 # question cache capacity, 0 for infinite but not recommended (this is used for storing logs)
 questioncachecap = 5000
 
-# interval for fake ip lookups in second
+# interval for fake ip discovery in second
 fakeInterval = 30
+
+# fake ip for cold boot, please change it for your networks
+# you only need a few common fake ip, ghost will discover other fake ips regularly
+fakeIPs = [
+	"93.46.8.89",
+	"8.7.198.45",
+	"203.98.7.65",
+	"46.82.174.68",
+	"78.16.49.15",
+	"59.24.3.173",
+	"37.61.54.158"
+]
 `
 
 // Config is the global configuration
@@ -99,6 +149,10 @@ func LoadConfig(path string) error {
 		if err := generateConfig(path); err != nil {
 			return err
 		}
+	}
+
+	if _, err := toml.Decode(defaultConfig, &gConfig); err != nil {
+		return errors.Wrap(err, "failed to load default config")
 	}
 
 	if _, err := toml.DecodeFile(path, &gConfig); err != nil {

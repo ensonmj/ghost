@@ -24,7 +24,7 @@ func LoggerInit(logFile string) (*os.File, error) {
 	logWriter := io.MultiWriter(os.Stdout, file)
 
 	log.SetOutput(logWriter)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 
 	return file, nil
 }
