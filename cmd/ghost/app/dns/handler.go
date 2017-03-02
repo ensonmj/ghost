@@ -48,12 +48,12 @@ func NewHandler() *DNSHandler {
 
 	cache := &MemoryCache{
 		Backend:  make(map[string]Mesg, gConfig.Maxcount),
-		Expire:   time.Duration(gConfig.Expire) * time.Second,
+		Expire:   gConfig.Expire.Duration,
 		Maxcount: gConfig.Maxcount,
 	}
 	negCache := &MemoryCache{
 		Backend:  make(map[string]Mesg),
-		Expire:   time.Duration(gConfig.Expire) * time.Second / 2,
+		Expire:   gConfig.Expire.Duration / 2,
 		Maxcount: gConfig.Maxcount,
 	}
 

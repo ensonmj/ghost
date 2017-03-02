@@ -11,8 +11,8 @@ import (
 
 func UpdateFakeIP(nameserver string) {
 	c := &dns.Client{
-		ReadTimeout:  time.Duration(gConfig.Timeout) * time.Second,
-		WriteTimeout: time.Duration(gConfig.Timeout) * time.Second,
+		ReadTimeout:  gConfig.Timeout.Duration,
+		WriteTimeout: gConfig.Timeout.Duration,
 	}
 	m := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
@@ -33,7 +33,7 @@ func UpdateFakeIP(nameserver string) {
 	}
 
 	go func() {
-		tInterval := time.NewTicker(time.Duration(gConfig.FakeInterval) * time.Second)
+		tInterval := time.NewTicker(gConfig.FakeInterval.Duration)
 		defer tInterval.Stop()
 		for {
 			getFakeIP(c, m, nameserver)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/miekg/dns"
 )
@@ -16,7 +15,7 @@ func TestCache(t *testing.T) {
 
 	cache := &MemoryCache{
 		Backend:  make(map[string]Mesg, gConfig.Maxcount),
-		Expire:   time.Duration(gConfig.Expire) * time.Second,
+		Expire:   gConfig.Expire,
 		Maxcount: gConfig.Maxcount,
 	}
 

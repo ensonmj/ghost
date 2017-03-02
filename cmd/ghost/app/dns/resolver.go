@@ -90,7 +90,7 @@ func lookupFromServer(ctx context.Context, c *dns.Client,
 	wg := &sync.WaitGroup{}
 
 	// Start lookup on each nameserver top-down, in every Interval millisecond
-	ticker := time.NewTicker(time.Duration(gConfig.Interval) * time.Millisecond)
+	ticker := time.NewTicker(gConfig.Interval.Duration)
 	defer ticker.Stop()
 
 	for _, ns := range nameservers {
@@ -192,9 +192,9 @@ func (r *Resolver) ISPNameservers() []string {
 
 // Timeout returns the resolver timeout
 func (r *Resolver) Timeout() time.Duration {
-	return time.Duration(gConfig.Timeout) * time.Second
+	return gConfig.Timeout.Duration
 }
 
 func (r *Resolver) SessionTimeout() time.Duration {
-	return time.Duration(gConfig.SessionTimeout) * time.Second
+	return gConfig.SessionTimeout.Duration
 }

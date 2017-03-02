@@ -4,10 +4,20 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
 )
+
+type duration struct {
+	time.Duration
+}
+
+func (d *duration) UnmarshalText(text []byte) (err error) {
+	d.Duration, err = time.ParseDuration(string(text))
+	return
+}
 
 type config struct {
 	Sources          []string
@@ -21,14 +31,14 @@ type config struct {
 	Nameservers      []string
 	CHNameservers    []string
 	ISPNameservers   []string
-	Interval         int
-	Timeout          int
-	SessionTimeout   int
-	Expire           int
+	Interval         duration
+	Timeout          duration
+	SessionTimeout   duration
+	Expire           duration
 	Maxcount         int
 	QuestionCacheCap int
 	TTL              uint32
-	FakeInterval     int
+	FakeInterval     duration
 	FakeIps          []string
 }
 
@@ -36,7 +46,7 @@ var defaultConfig = `# list of sources to pull blocklists from, stores them in s
 sources = [
 	"http://mirror1.malwaredomains.com/files/justdomains",
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
-	"http://sysctl.org/cameleon/hosts",
+	# "http://sysctl.org/cameleon/hosts",
 	"https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt",
@@ -105,17 +115,17 @@ chnameservers = [
 ispnameservers = [
 ]
 
-# concurrency interval for lookups in miliseconds
-interval = 200
+# concurrency interval for lookups
+interval = "100ms"
 
-# timeout for one dns lookup message in seconds
-timeout = 10
+# timeout for one dns lookup message
+timeout = "800ms"
 
-# timeout for one dns lookup session(one message for on target) in seconds
-sessiontimeout = 30
+# timeout for one dns lookup session(one message for on target)
+sessiontimeout = "2s"
 
-# cache entry lifespan in seconds
-expire = 3600
+# cache entry lifespan
+expire = "3600s"
 
 # cache capacity, 0 for infinite
 maxcount = 0
@@ -123,8 +133,8 @@ maxcount = 0
 # question cache capacity, 0 for infinite but not recommended (this is used for storing logs)
 questioncachecap = 5000
 
-# interval for fake ip discovery in second
-fakeInterval = 30
+# interval for fake ip discovery
+fakeInterval = "30s"
 
 # fake ip for cold boot, please change it for your networks
 # you only need a few common fake ip, ghost will discover other fake ips regularly
