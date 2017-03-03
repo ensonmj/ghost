@@ -46,7 +46,7 @@ var defaultConfig = `# list of sources to pull blocklists from, stores them in s
 sources = [
 	"http://mirror1.malwaredomains.com/files/justdomains",
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
-	# "http://sysctl.org/cameleon/hosts",
+	"http://sysctl.org/cameleon/hosts",
 	"https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt",
@@ -62,6 +62,8 @@ blocklist = []
 
 # manual whitelist entries
 whitelist = [
+	"126.com",
+	"163.com",
 	"getsentry.com",
 	"www.getsentry.com"
 ]
