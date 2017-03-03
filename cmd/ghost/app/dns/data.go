@@ -2,6 +2,7 @@ package dns
 
 import (
 	"bufio"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"log"
@@ -11,15 +12,19 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/oschwald/geoip2-golang"
 	"github.com/pkg/errors"
 )
 
+var gGeoIP *geoip2.Reader
+
 // LoadData loads the BlockCache
 func LoadData(forceupdate bool) error {
-	if _, err := os.Stat(gConfig.SourceDir); os.IsNotExist(err) {
-		if err := os.Mkdir(gConfig.SourceDir, 0700); err != nil {
+	var err error
+	if _, err = os.Stat(gConfig.DataDir); os.IsNotExist(err) {
+		if err = os.Mkdir(gConfig.DataDir, os.ModePerm); err != nil {
 			return errors.Wrapf(err, "failed to create source directory: %s",
-				gConfig.SourceDir)
+				gConfig.DataDir)
 		}
 	}
 
@@ -32,23 +37,63 @@ func LoadData(forceupdate bool) error {
 		gBlockCache.Set(entry, true)
 	}
 
-	log.Printf("loading blocked domains from %s\n", gConfig.SourceDir)
+	log.Printf("loading blocked domains from %s\n", gConfig.DataDir)
 	for _, uri := range gConfig.Sources {
 		u, _ := url.Parse(uri)
 		fileName := fmt.Sprintf("%s%s", u.Host, strings.Replace(u.Path, "/", "-", -1))
-		path := filepath.Join(gConfig.SourceDir, fileName)
-		if _, err := os.Stat(path); os.IsNotExist(err) || forceupdate {
+		path := filepath.Join(gConfig.DataDir, fileName)
+		if _, err = os.Stat(path); os.IsNotExist(err) || forceupdate {
 			log.Printf("fetching source %s\n", uri)
-			if err := downloadFile(uri, path); err != nil {
-				log.Printf("failed to fetch source: %s\n", err)
+			if err = downloadFile(uri, path); err != nil {
+				return err
 			}
 		}
 
-		if err := parseHostFile(path, whitelist); err != nil {
+		if err = parseHostFile(path, whitelist); err != nil {
 			return err
 		}
 	}
 	log.Printf("%d domains loaded from sources\n", gBlockCache.Length())
+
+	log.Println("loading GeoIP database")
+	dbPath := filepath.Join(gConfig.DataDir, gConfig.GeoIPName)
+	if _, err = os.Stat(dbPath); os.IsNotExist(err) || forceupdate {
+		gzPath := filepath.Join(gConfig.DataDir, filepath.Base(gConfig.GeoIPSrc))
+		if _, err = os.Stat(gzPath); os.IsNotExist(err) || forceupdate {
+			if err = downloadFile(gConfig.GeoIPSrc, gzPath); err != nil {
+				return err
+			}
+		}
+
+		f, err := os.Open(gzPath)
+		if err != nil {
+			return errors.Wrap(err, "failed to open compressed GeoIP database")
+		}
+		defer f.Close()
+
+		gz, err := gzip.NewReader(f)
+		if err != nil {
+			return errors.Wrap(err, "failed to decompress GeoIP database")
+		}
+		defer gz.Close()
+
+		path := filepath.Join(gConfig.DataDir, gConfig.GeoIPName)
+		fw, err := os.Create(path)
+		if err != nil {
+			return errors.Wrap(err, "failed to create GeoIP file")
+		}
+		defer fw.Close()
+
+		_, err = io.Copy(fw, gz)
+		if err != nil {
+			return errors.Wrap(err, "failed to write GeoIP file")
+		}
+	}
+
+	if gGeoIP, err = geoip2.Open(dbPath); err != nil {
+		return errors.Wrapf(err, "failed to open geoip database:%s\n", dbPath)
+	}
+	log.Println("finish to load GeoIP database")
 
 	return nil
 }

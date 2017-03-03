@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -156,9 +157,31 @@ func doLookup(c *dns.Client, nameserver string, req *dns.Msg,
 }
 
 func selectMsg(gMsg, cMsg *dns.Msg) (*dns.Msg, error) {
-	if gMsg != nil {
+	if gMsg == nil {
+		return cMsg, nil
+	}
+	if cMsg == nil || gGeoIP == nil {
 		return gMsg, nil
 	}
+
+	for _, answer := range cMsg.Answer {
+		switch t := answer.(type) {
+		case *dns.A:
+			ip := net.ParseIP(t.A.String())
+			record, err := gGeoIP.Country(ip)
+			if err != nil {
+				return gMsg, nil
+			}
+			// we don't trust foreign ip return by DNS server in China
+			if record.Country.IsoCode != "CN" {
+				log.Printf("resolve %s get geoip:%v\n", cMsg.Question[0].Name, record)
+				return gMsg, nil
+			}
+
+			return cMsg, nil
+		}
+	}
+
 	return cMsg, nil
 }
 

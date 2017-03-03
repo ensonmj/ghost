@@ -21,7 +21,9 @@ func (d *duration) UnmarshalText(text []byte) (err error) {
 
 type config struct {
 	Sources          []string
-	SourceDir        string
+	GeoIPSrc         string
+	GeoIPName        string
+	DataDir          string
 	Blocklist        []string
 	Whitelist        []string
 	Bind             string
@@ -54,8 +56,14 @@ sources = [
 	"https://raw.githubusercontent.com/quidsup/notrack/master/trackers.txt"
 ]
 
-# locations to store blocklist files
-sourcedir = "./sources"
+# source of GeoIP database
+geoipSrc = "http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.mmdb.gz"
+
+# local file name of GeoIP database
+geoipName = "GeoLite2-City.mmdb"
+
+# locations to store blocklist files and GeoIP database
+datadir = "./data"
 
 # manual blocklist entries
 blocklist = []
