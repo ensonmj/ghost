@@ -174,7 +174,8 @@ func selectMsg(gMsg, cMsg *dns.Msg) (*dns.Msg, error) {
 			}
 			// we don't trust foreign ip return by DNS server in China
 			if record.Country.IsoCode != "CN" {
-				log.Printf("resolve %s get geoip:%v\n", cMsg.Question[0].Name, record)
+				log.Printf("resolve %s get geoip contry: %s\n",
+					cMsg.Question[0].Name, record.Country.IsoCode)
 				return gMsg, nil
 			}
 
