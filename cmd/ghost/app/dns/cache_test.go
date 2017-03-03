@@ -15,7 +15,7 @@ func TestCache(t *testing.T) {
 
 	cache := &MemoryCache{
 		Backend:  make(map[string]Mesg, gConfig.Maxcount),
-		Expire:   gConfig.Expire,
+		Expire:   gConfig.Expire.Duration,
 		Maxcount: gConfig.Maxcount,
 	}
 

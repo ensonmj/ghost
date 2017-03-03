@@ -23,7 +23,7 @@ func NewServer(rTimeout, wTimeout time.Duration) *Server {
 }
 
 // Run starts the server
-func (s *Server) Run() {
+func (s *Server) AsyRun() {
 	handler := NewHandler()
 
 	tcpHandler := dns.NewServeMux()

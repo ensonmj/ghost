@@ -33,14 +33,15 @@ func dnsMain(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	go dns.UpdateFakeIP("114.114.114.114:53")
+	go dns.StartAPIServer(viper.GetBool("debug"))
+	dns.NewServer(5*time.Second, 5*time.Second).AsyRun()
+
+	// need to resolve domains for file downloads
+	// we should start our dns server firstly
 	if err := dns.LoadData(fDNSForceUpdate); err != nil {
 		return err
 	}
-
-	dns.UpdateFakeIP("114.114.114.114:53")
-
-	dns.StartAPIServer(viper.GetBool("debug"))
-	dns.NewServer(5*time.Second, 5*time.Second).Run()
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)

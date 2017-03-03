@@ -79,10 +79,8 @@ func StartAPIServer(debug bool) {
 		c.IndentedJSON(http.StatusOK, filteredCache)
 	})
 
-	go func() {
-		log.Println("API server listening on ", gConfig.API)
-		if err := router.Run(gConfig.API); err != nil {
-			log.Println("router return err ", err)
-		}
-	}()
+	log.Println("API server listening on ", gConfig.API)
+	if err := router.Run(gConfig.API); err != nil {
+		log.Println("router return err ", err)
+	}
 }
