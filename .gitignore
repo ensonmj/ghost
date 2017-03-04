@@ -26,4 +26,6 @@ _testmain.go
 *.swo
 
 log/
-sources/
+data/
+dns.toml
+cmd/ghost/ghost
