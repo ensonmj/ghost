@@ -21,6 +21,7 @@ func (d *duration) UnmarshalText(text []byte) (err error) {
 
 type config struct {
 	Sources          []string
+	EasyLists        []string
 	GeoIPSrc         string
 	GeoIPName        string
 	DataDir          string
@@ -44,7 +45,7 @@ type config struct {
 	FakeIps          []string
 }
 
-var defaultConfig = `# list of sources to pull blocklists from, stores them in sourcedir
+var defaultConfig = `# list of sources to pull blocklists from, stores them in datadir
 sources = [
 	"http://mirror1.malwaredomains.com/files/justdomains",
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
@@ -54,6 +55,13 @@ sources = [
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt",
 	"http://hosts-file.net/ad_servers.txt",
 	"https://raw.githubusercontent.com/quidsup/notrack/master/trackers.txt"
+]
+
+# easylists from adblock
+easylists = [
+	"https://easylist-downloads.adblockplus.org/easylistchina+easylist.txt",
+	"https://easylist-downloads.adblockplus.org/easyprivacy.txt",
+	"https://raw.githubusercontent.com/cjx82630/cjxlist/master/cjx-annoyance.txt"
 ]
 
 # source of GeoIP database
@@ -72,6 +80,7 @@ blocklist = []
 whitelist = [
 	"126.com",
 	"163.com",
+	"mp.weixin.qq.com",
 	"getsentry.com",
 	"www.getsentry.com"
 ]

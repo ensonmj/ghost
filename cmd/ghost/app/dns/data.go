@@ -38,6 +38,22 @@ func LoadData(forceupdate bool) error {
 	}
 
 	log.Printf("loading blocked domains from %s\n", gConfig.DataDir)
+	for _, uri := range gConfig.EasyLists {
+		u, _ := url.Parse(uri)
+		fileName := fmt.Sprintf("%s%s", u.Host, strings.Replace(u.Path, "/", "-", -1))
+		path := filepath.Join(gConfig.DataDir, fileName)
+		if _, err = os.Stat(path); os.IsNotExist(err) || forceupdate {
+			log.Printf("fetching source %s\n", uri)
+			if err = downloadFile(uri, path); err != nil {
+				return err
+			}
+		}
+
+		if err = parseEasyList(path, whitelist); err != nil {
+			return err
+		}
+	}
+	log.Printf("%d domains loaded from easylist\n", gBlockCache.Length())
 	for _, uri := range gConfig.Sources {
 		u, _ := url.Parse(uri)
 		fileName := fmt.Sprintf("%s%s", u.Host, strings.Replace(u.Path, "/", "-", -1))
@@ -53,7 +69,7 @@ func LoadData(forceupdate bool) error {
 			return err
 		}
 	}
-	log.Printf("%d domains loaded from sources\n", gBlockCache.Length())
+	log.Printf("%d domains loaded from easylist and host sources\n", gBlockCache.Length())
 
 	log.Println("loading GeoIP database")
 	dbPath := filepath.Join(gConfig.DataDir, gConfig.GeoIPName)
@@ -123,7 +139,7 @@ func downloadFile(uri string, path string) error {
 func parseHostFile(path string, whitelist map[string]bool) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return errors.Wrapf(err, "failed to open file: %s", path)
+		return errors.Wrapf(err, "failed to open host file: %s", path)
 	}
 	defer file.Close()
 
@@ -146,6 +162,33 @@ func parseHostFile(path string, whitelist map[string]bool) error {
 	}
 	if err := scanner.Err(); err != nil {
 		return errors.Wrapf(err, "failed to scan hostfile: %s", path)
+	}
+
+	return nil
+}
+
+func parseEasyList(path string, whitelist map[string]bool) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open easylist file: %s", path)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" ||
+			!strings.HasPrefix(line, "||") || !strings.HasSuffix(line, "^") {
+			continue
+		}
+
+		domain := strings.TrimSuffix(strings.TrimPrefix(line, "||"), "^")
+		if !gBlockCache.Exists(domain) && !whitelist[domain] {
+			gBlockCache.Set(domain, true)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return errors.Wrapf(err, "failed to scan easylist: %s", path)
 	}
 
 	return nil
