@@ -4,9 +4,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/expvar"
 	"github.com/gin-contrib/static"
-	"gopkg.in/gin-contrib/cors.v1"
-	"gopkg.in/gin-gonic/gin.v1"
+	"github.com/gin-gonic/gin"
 )
 
 // StartAPIServer launches the API server
@@ -19,6 +20,7 @@ func StartAPIServer(debug bool) {
 	router.Use(cors.Default())
 	// static files hav higher priority over dynamic routes
 	router.Use(static.Serve("/", static.LocalFile("./public", true)))
+	router.GET("/debug/vars", expvar.Handler())
 
 	router.GET("/blockcache", func(c *gin.Context) {
 		c.IndentedJSON(http.StatusOK, gin.H{"length": gBlockCache.Length(), "items": gBlockCache.Items()})

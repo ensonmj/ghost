@@ -37,8 +37,8 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (*dns.Msg, error) {
 		WriteTimeout: r.Timeout(),
 	}
 
-	var gMsg, cMsg *dns.Msg
-	var gRes, cRes chan *dns.Msg
+	var gMsg, cMsg, iMsg *dns.Msg
+	var gRes, cRes, iRes chan *dns.Msg
 	ctx, _ := context.WithTimeout(context.Background(), r.SessionTimeout())
 
 	if len(r.Nameservers()) > 0 {
@@ -49,6 +49,10 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (*dns.Msg, error) {
 		cRes = make(chan *dns.Msg, 1)
 		go lookupFromServer(ctx, c, r.CHNameservers(), req, cRes)
 	}
+	if len(r.ISPNameservers()) > 0 {
+		iRes = make(chan *dns.Msg, 1)
+		go lookupFromServer(ctx, c, r.ISPNameservers(), req, iRes)
+	}
 
 	for {
 		select {
@@ -56,31 +60,20 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (*dns.Msg, error) {
 			gRes = nil
 		case cMsg = <-cRes:
 			cRes = nil
+		case iMsg = <-iRes:
+			iRes = nil
 		}
 
-		if gRes == nil && cRes == nil {
+		if gRes == nil && cRes == nil && iRes == nil {
 			break
 		}
 	}
 
-	if gMsg != nil || cMsg != nil {
-		return selectMsg(gMsg, cMsg)
+	if gMsg == nil && cMsg == nil && iMsg == nil {
+		return nil, ResolvError{UnFqdn(req.Question[0].Name), net, r.AllNameservers()}
 	}
 
-	qname := UnFqdn(req.Question[0].Name)
-	if len(r.ISPNameservers()) <= 0 {
-		return nil, ResolvError{qname, net, r.AllNameservers()}
-	}
-
-	ispRes := make(chan *dns.Msg, 1)
-	ctx, _ = context.WithTimeout(context.Background(), r.SessionTimeout())
-	lookupFromServer(ctx, c, r.ISPNameservers(), req, ispRes)
-	msg := <-ispRes
-	if msg != nil {
-		return msg, nil
-	}
-
-	return nil, ResolvError{qname, net, r.AllNameservers()}
+	return selectMsg(gMsg, cMsg, iMsg)
 }
 
 func lookupFromServer(ctx context.Context, c *dns.Client,
@@ -156,7 +149,13 @@ func doLookup(c *dns.Client, nameserver string, req *dns.Msg,
 	}
 }
 
-func selectMsg(gMsg, cMsg *dns.Msg) (*dns.Msg, error) {
+func selectMsg(gMsg, cMsg, iMsg *dns.Msg) (*dns.Msg, error) {
+	// iMsg as backup
+	if gMsg == nil && cMsg == nil {
+		return iMsg, nil
+	}
+
+	// select between gMsg and cMsg
 	if gMsg == nil {
 		return cMsg, nil
 	}
