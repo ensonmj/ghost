@@ -58,7 +58,7 @@ func main() {
 	cmd.AddCommand(app.TunCmd)
 	pflags := cmd.PersistentFlags()
 	pflags.BoolVarP(&fDebug, "debug", "D", false, "Open log for debug")
-	pflags.StringVarP(&fLogDir, "logDir", "L", "./log", "dir for store log file")
+	pflags.StringVar(&fLogDir, "logDir", "./log", "dir for store log file")
 	pflags.BoolVar(&fFlushLog, "flushLog", false, "delete old log file before excute")
 	viper.BindPFlag("debug", pflags.Lookup("debug"))
 
