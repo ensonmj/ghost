@@ -58,23 +58,27 @@ func ParseProxyNode(s string) (node ProxyNode, err error) {
 		node.Transport = schemes[1]
 	}
 
+	// transport: ws/wss/tls/http2/tcp/udp/rtcp/rudp
 	switch node.Transport {
-	case "ws", "wss", "tls", "http2", "quic", "kcp", "redirect", "ssu":
-	case "https":
-		node.Protocol = "http"
-		node.Transport = "tls"
+	case "ws", "wss", "tls", "http2":
 	case "tcp", "udp":
 		// local port forward: -L tcp://:2222/192.168.1.1:22
 		node.Remote = strings.Trim(u.EscapedPath(), "/")
 	case "rtcp", "rudp":
 		// remote port forward: -L rtcp://:2222/192.168.1.1:22 -F socks://172.24.10.1:1080
 		node.Remote = strings.Trim(u.EscapedPath(), "/")
+	case "https":
+		node.Protocol = "http"
+		node.Transport = "tls"
 	default:
 		node.Transport = ""
 	}
 
+	// protocol: http/socks5/ss
 	switch node.Protocol {
-	case "http", "http2", "socks", "socks5", "ss":
+	case "http", "socks5", "ss":
+	case "socks":
+		node.Protocol = "socks5"
 	default:
 		node.Protocol = ""
 	}

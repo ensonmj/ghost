@@ -36,10 +36,10 @@ func NewProxyServer(node ProxyNode, chain *ProxyChain, config *tls.Config) *Prox
 
 func (s *ProxyServer) ListenAndServe() error {
 	log.Printf("proxy server starting: node[%s], chain[%s]\n", s.Node, s.Chain)
-	return s.TransportMux()
+	return s.transportMux()
 }
 
-func (s *ProxyServer) TransportMux() error {
+func (s *ProxyServer) transportMux() error {
 	node := s.Node
 
 	switch node.Transport {
@@ -56,13 +56,13 @@ func (s *ProxyServer) TransportMux() error {
 		}
 		return NewUdpForwardServer(s, ttl).ListenAndServe()
 	case "tls": // tls connection
-		return s.ProtocolMux(true)
+		return s.protocolMux(true)
 	default:
-		return s.ProtocolMux(false)
+		return s.protocolMux(false)
 	}
 }
 
-func (s *ProxyServer) ProtocolMux(useTLS bool) error {
+func (s *ProxyServer) protocolMux(useTLS bool) error {
 	var ln net.Listener
 	var err error
 	if useTLS {

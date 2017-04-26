@@ -2,15 +2,11 @@ package tun
 
 import (
 	"bytes"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 const DialTimeout = 1 * time.Second
@@ -54,36 +50,6 @@ func (c *ProxyChain) SetNode(index int, node ProxyNode) {
 	if index < len(c.nodes) {
 		c.nodes[index] = node
 	}
-}
-
-func enablePing(conn net.Conn, interval time.Duration) {
-	if conn == nil || interval == 0 {
-		return
-	}
-
-	log.Println("[http2] ping enabled, interval:", interval)
-	go func() {
-		t := time.NewTicker(interval)
-		var framer *http2.Framer
-		for {
-			select {
-			case <-t.C:
-				if framer == nil {
-					framer = http2.NewFramer(conn, conn)
-				}
-
-				var p [8]byte
-				rand.Read(p[:])
-				err := framer.WritePing(false, p)
-				if err != nil {
-					t.Stop()
-					framer = nil
-					log.Println("[http2] ping:", err)
-					return
-				}
-			}
-		}
-	}()
 }
 
 // Connect to addr through proxy chain
@@ -139,9 +105,8 @@ func (c *ProxyChain) travelNodes(nodes ...ProxyNode) (conn *ProxyConn, err error
 	}
 	setKeepAlive(cc, KeepAliveTime)
 
-	pc := NewProxyConn(cc, node)
-	conn = pc
-	if err = pc.Handshake(); err != nil {
+	conn = NewProxyConn(cc, node)
+	if err = conn.Handshake(); err != nil {
 		return
 	}
 
@@ -149,9 +114,8 @@ func (c *ProxyChain) travelNodes(nodes ...ProxyNode) (conn *ProxyConn, err error
 		if err = conn.Connect(node.Addr); err != nil {
 			return
 		}
-		pc := NewProxyConn(conn, node)
-		conn = pc
-		if err = pc.Handshake(); err != nil {
+		conn = NewProxyConn(conn, node)
+		if err = conn.Handshake(); err != nil {
 			return
 		}
 	}

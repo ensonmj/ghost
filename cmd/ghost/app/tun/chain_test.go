@@ -1,6 +1,8 @@
 package tun
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestNewProxyChain(t *testing.T) {
 	nodes := []string{
