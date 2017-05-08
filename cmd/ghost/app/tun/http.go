@@ -1,74 +1,114 @@
 package tun
 
 import (
+	"bufio"
+	"encoding/base64"
+	"io/ioutil"
+	"log"
+	"net"
 	"net/http"
+	"net/url"
 
 	"github.com/elazarl/goproxy"
+	"github.com/pkg/errors"
 )
 
-const Version = "0.0.1"
-
-type HttpServer struct {
-	cn CommNode
-	// conn net.Conn
-	// Base *ProxyServer
+type HttpNode struct {
+	cn    *ProxyNode
+	chain *ProxyChain
 }
 
-func NewHttpServer(cn CommNode) *HttpServer {
-	return &HttpServer{
+func NewHttpNode(cn *ProxyNode) *HttpNode {
+	return &HttpNode{
 		cn: cn,
 	}
 }
 
-func (s *HttpServer) ListenAndServe() error {
-	return http.ListenAndServe(s.cn.Addr, GetHttpProxyHandler(true))
+func (n *HttpNode) ListenAndServe(chain *ProxyChain) error {
+	n.chain = chain
+	return http.ListenAndServe(n.cn.URL.Host, n.GetHttpProxyHandlerWithProxy(true))
 }
 
-func GetHttpProxyHandler(verbose bool) http.Handler {
+func (n *HttpNode) GetHttpProxyHandlerWithProxy(verbose bool) http.Handler {
 	handler := goproxy.NewProxyHttpServer()
 	handler.Verbose = verbose
+	handler.Tr.MaxIdleConnsPerHost = 1000
+	handler.Tr.DisableKeepAlives = true
+	handler.Tr.Dial = n.Dial
+
 	return handler
 }
 
-func (s *HttpServer) Handshake() error {
-	// if s.cn.tls {
+// Dial server or chain proxy
+func (n *HttpNode) Dial(network, addr string) (net.Conn, error) {
+	return n.chain.Dial(network, addr)
+}
+
+func (n *HttpNode) GetProxyNode() *ProxyNode {
+	return n.cn
+}
+
+func (n *HttpNode) DialIn() (net.Conn, error) {
+	log.Printf("dial to chain node: %s\n", n)
+	c, err := net.Dial("tcp", n.cn.URL.Host)
+	if err != nil {
+		return nil, errors.Wrap(err, "")
+	}
+
+	// if n.cn.URL.Scheme == "https" {
 	// 	cfg := &tls.Config{
-	// 		InsecureSkipVerify: c.Node.insecureSkipVerify(),
-	// 		ServerName:         c.Node.serverName,
+	// 	// InsecureSkipVerify: n.Node.insecureSkipVerify(),
+	// 	// ServerName:         n.Node.serverName,
 	// 	}
-	// 	c.conn = tls.Client(c.conn, cfg)
+	// 	c = tls.Client(c, cfg)
 	// }
 
-	// req := &http.Request{
-	// 	Method:     http.MethodConnect,
-	// 	URL:        &url.URL{Host: addr},
-	// 	Host:       addr,
-	// 	ProtoMajor: 1,
-	// 	ProtoMinor: 1,
-	// 	Header:     make(http.Header),
-	// }
-	// req.Header.Set("Proxy-Connection", "keep-alive")
-	// if c.Node.User != nil {
-	// 	user := c.Node.User
-	// 	s := user.String()
-	// 	if _, set := user.Password(); !set {
-	// 		s += ":"
-	// 	}
-	// 	req.Header.Set("Proxy-Authorization",
-	// 		"Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
-	// }
-	// if err := req.Write(c); err != nil {
-	// 	return err
-	// }
+	return c, nil
+}
 
-	// resp, err := http.ReadResponse(bufio.NewReader(c), req)
-	// if err != nil {
-	// 	return err
-	// }
-	// if resp.StatusCode != http.StatusOK {
-	// 	return errors.New(resp.Status)
-	// }
-	return nil
+func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
+	// use CONNECT to create tunnel
+	log.Printf("handshake with chain node: %s\n", n)
+	req := &http.Request{
+		Method:     http.MethodConnect,
+		URL:        &url.URL{Host: addr},
+		Host:       addr,
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:     make(http.Header),
+	}
+	req.Header.Set("Proxy-Connection", "keep-alive")
+	if n.cn.URL.User != nil {
+		user := n.cn.URL.User
+		s := user.String()
+		if _, set := user.Password(); !set {
+			s += ":"
+		}
+		req.Header.Set("Proxy-Authorization",
+			"Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
+	}
+	if err := req.Write(c); err != nil {
+		return nil, err
+	}
+
+	resp, err := http.ReadResponse(bufio.NewReader(c), req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		c.Close()
+		return nil, errors.New("proxy refused connection" + string(resp))
+	}
+
+	return c, nil
+}
+
+func (n *HttpNode) String() string {
+	return n.cn.String()
 }
 
 // func NewHttpServer(conn net.Conn, base *ProxyServer) *HttpServer {

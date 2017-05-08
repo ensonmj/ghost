@@ -35,6 +35,7 @@ func init() {
 }
 
 func tunMain(cmd *cobra.Command, args []string) error {
+	// cert
 	if _, err := os.Stat(fCertFile); os.IsNotExist(err) {
 		if err := tun.CreateCertificate(true, fCertFile, fKeyFile); err != nil {
 			return err
@@ -46,27 +47,27 @@ func tunMain(cmd *cobra.Command, args []string) error {
 	}
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
-	// chain, err := tun.NewProxyChain(fChainNodes...)
-	// if err != nil {
-	// 	return err
-	// }
+	// chain
+	pc, err := tun.NewProxyChain(fChainNodes...)
+	if err != nil {
+		return err
+	}
 
+	// listen
 	var wg sync.WaitGroup
 	for _, strNode := range fLocalNodes {
-		node, err := tun.ParseProxyNode(strNode)
+		pn, err := tun.ParseProxyNode(strNode)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
 		wg.Add(1)
-		go func(node tun.ProxyNode) {
+		go func(pn *tun.ProxyNode) {
 			defer wg.Done()
-			// log.Printf("proxy listen and serve err: %+v\n",
-			// 	tun.NewProxyServer(node, chain, tlsConfig).ListenAndServe())
 			log.Printf("proxy listen and serve err: %+v\n",
-				tun.NewProxyServer(node, tlsConfig).ListenAndServe())
-		}(node)
+				tun.NewProxyServer(pn, pc, tlsConfig).ListenAndServe())
+		}(pn)
 	}
 	wg.Wait()
 

@@ -1,131 +1,102 @@
 package tun
 
-// import (
-// 	"bytes"
-// 	"errors"
-// 	"fmt"
-// 	"net"
-// 	"strings"
-// 	"time"
-// )
+import (
+	"bytes"
+	"log"
+	"net"
+	"time"
+)
 
-// const DialTimeout = 1 * time.Second
-// const KeepAliveTime = 1 * time.Second
+const DialTimeout = 1 * time.Second
 
-// // Proxy chain holds a list of proxy nodes
-// type ProxyChain struct {
-// 	nodes []ProxyNode
-// }
+type ChainNode interface {
+	GetProxyNode() *ProxyNode
+	// First node need DialIn
+	DialIn() (net.Conn, error)
+	// Others need DialOut
+	DialOut(c net.Conn, addr string) (net.Conn, error)
+}
 
-// func NewProxyChain(nodes ...string) (*ProxyChain, error) {
-// 	chain := &ProxyChain{}
+// Proxy chain holds a list of proxy nodes
+type ProxyChain struct {
+	node  ChainNode
+	chain *ProxyChain
+}
 
-// 	for _, n := range nodes {
-// 		node, err := ParseProxyNode(n)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		chain.AddProxyNode(node)
-// 	}
+func (pc *ProxyChain) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("&ProxyChain{")
+	if pc.node == nil {
+		buf.WriteString("}")
+	}
+	if pc.chain != nil {
+		buf.WriteString(pc.chain.String())
+	}
+	return buf.String()
+}
 
-// 	return chain, nil
-// }
+func (pc *ProxyChain) AddChainNode(cn ChainNode) {
+	if pc.node == nil {
+		pc.node = cn
+		return
+	}
 
-// func (c *ProxyChain) AddProxyNode(node ProxyNode) {
-// 	c.nodes = append(c.nodes, node)
-// }
+	if pc.chain == nil {
+		pc.chain = &ProxyChain{node: cn}
+		return
+	}
 
-// func (c *ProxyChain) Nodes() []ProxyNode {
-// 	return c.nodes
-// }
+	pc.chain.AddChainNode(cn)
+}
 
-// func (c *ProxyChain) GetNode(index int) *ProxyNode {
-// 	if index < len(c.nodes) {
-// 		return &c.nodes[index]
-// 	}
-// 	return nil
-// }
+func NewProxyChain(nodes ...string) (*ProxyChain, error) {
+	if len(nodes) <= 0 {
+		log.Println("no chain node")
+		return nil, nil
+	}
 
-// func (c *ProxyChain) SetNode(index int, node ProxyNode) {
-// 	if index < len(c.nodes) {
-// 		c.nodes[index] = node
-// 	}
-// }
+	chain := &ProxyChain{}
+	for _, n := range nodes {
+		pn, err := ParseProxyNode(n)
+		if err != nil {
+			return nil, err
+		}
+		var cn ChainNode
+		switch pn.URL.Scheme {
+		case "http":
+			cn = NewHttpNode(pn)
+		}
 
-// // Connect to addr through proxy chain
-// func (c *ProxyChain) Dial(addr string) (net.Conn, error) {
-// 	if !strings.Contains(addr, ":") {
-// 		addr += ":80"
-// 	}
-// 	return c.dialWithNodes(addr, c.nodes...)
-// }
+		chain.AddChainNode(cn)
+	}
 
-// // GetConn initializes a proxy chain connection,
-// // if no proxy nodes on this chain, it will return error
-// func (c *ProxyChain) GetConn() (net.Conn, error) {
-// 	nodes := c.nodes
-// 	if len(nodes) == 0 {
-// 		return nil, errors.New("empty")
-// 	}
+	return chain, nil
+}
 
-// 	return c.travelNodes(nodes...)
-// }
+func (pc *ProxyChain) Dial(network, addr string) (net.Conn, error) {
+	// nil chain is also workable
+	log.Printf("proxychian dial: %v\n", pc)
+	if pc == nil {
+		log.Println("no chain node, dial directly")
+		return net.DialTimeout(network, addr, DialTimeout)
+	}
 
-// func (c *ProxyChain) dialWithNodes(addr string, nodes ...ProxyNode) (conn net.Conn, err error) {
-// 	if len(nodes) == 0 {
-// 		return net.DialTimeout("tcp", addr, DialTimeout)
-// 	}
+	c, err := pc.DialIn()
+	if err != nil {
+		return nil, err
+	}
 
-// 	pc, err := c.travelNodes(nodes...)
-// 	if err != nil {
-// 		return
-// 	}
-// 	if err = pc.Connect(addr); err != nil {
-// 		pc.Close()
-// 		return
-// 	}
-// 	conn = pc
-// 	return
-// }
+	return pc.DialOut(c, addr)
+}
 
-// func (c *ProxyChain) travelNodes(nodes ...ProxyNode) (conn *ProxyConn, err error) {
-// 	defer func() {
-// 		if err != nil && conn != nil {
-// 			conn.Close()
-// 			conn = nil
-// 		}
-// 	}()
+func (pc *ProxyChain) DialIn() (net.Conn, error) {
+	return net.DialTimeout("tcp", pc.node.GetProxyNode().URL.Host, DialTimeout)
+}
 
-// 	var cc net.Conn
-// 	node := nodes[0]
-
-// 	cc, err = net.DialTimeout("tcp", node.Addr, DialTimeout)
-// 	if err != nil {
-// 		return
-// 	}
-// 	setKeepAlive(cc, KeepAliveTime)
-
-// 	conn = NewProxyConn(cc, node)
-// 	if err = conn.Handshake(); err != nil {
-// 		return
-// 	}
-
-// 	for _, node := range nodes[1:] {
-// 		if err = conn.Connect(node.Addr); err != nil {
-// 			return
-// 		}
-// 		conn = NewProxyConn(conn, node)
-// 		if err = conn.Handshake(); err != nil {
-// 			return
-// 		}
-// 	}
-// 	return
-// }
-
-// func (c *ProxyChain) String() string {
-// 	var buf bytes.Buffer
-// 	for i, n := range c.nodes {
-// 		buf.WriteString(fmt.Sprintf("<%d: %s>", i, n))
-// 	}
-// 	return buf.String()
-// }
+func (pc *ProxyChain) DialOut(c net.Conn, addr string) (net.Conn, error) {
+	pc.node.DialOut(c, addr)
+	if pc.chain == nil {
+		return c, nil
+	}
+	return pc.chain.DialOut(c, addr)
+}
