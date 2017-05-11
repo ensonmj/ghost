@@ -175,6 +175,7 @@ package tun
 // }
 
 // type Socks5Server struct {
+// 	pn *ProxyNode
 // 	conn     net.Conn
 // 	selector *serverSelector
 // 	Base     *ProxyServer
@@ -198,7 +199,7 @@ package tun
 // 	}
 // }
 
-// func (s *Socks5Server) Serve() {
+// func (s *Socks5Server) ListenAndServe(chain *ProxyChain) {
 // 	conn := gosocks5.ServerConn(s.conn, s.selector)
 // 	req, err := gosocks5.ReadRequest(conn)
 // 	if err != nil {

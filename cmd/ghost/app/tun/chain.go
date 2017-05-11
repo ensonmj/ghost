@@ -19,34 +19,34 @@ type ChainNode interface {
 
 // Proxy chain holds a list of proxy nodes
 type ProxyChain struct {
-	node  ChainNode
-	chain *ProxyChain
+	cn   ChainNode
+	next *ProxyChain
 }
 
 func (pc *ProxyChain) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("&ProxyChain{")
-	if pc.node == nil {
+	if pc.cn == nil {
 		buf.WriteString("}")
 	}
-	if pc.chain != nil {
-		buf.WriteString(pc.chain.String())
+	if pc.next != nil {
+		buf.WriteString(pc.next.String())
 	}
 	return buf.String()
 }
 
 func (pc *ProxyChain) AddChainNode(cn ChainNode) {
-	if pc.node == nil {
-		pc.node = cn
+	if pc.cn == nil {
+		pc.cn = cn
 		return
 	}
 
-	if pc.chain == nil {
-		pc.chain = &ProxyChain{node: cn}
+	if pc.next == nil {
+		pc.next = &ProxyChain{cn: cn}
 		return
 	}
 
-	pc.chain.AddChainNode(cn)
+	pc.next.AddChainNode(cn)
 }
 
 func NewProxyChain(nodes ...string) (*ProxyChain, error) {
@@ -90,13 +90,13 @@ func (pc *ProxyChain) Dial(network, addr string) (net.Conn, error) {
 }
 
 func (pc *ProxyChain) DialIn() (net.Conn, error) {
-	return net.DialTimeout("tcp", pc.node.GetProxyNode().URL.Host, DialTimeout)
+	return net.DialTimeout("tcp", pc.cn.GetProxyNode().URL.Host, DialTimeout)
 }
 
 func (pc *ProxyChain) DialOut(c net.Conn, addr string) (net.Conn, error) {
-	pc.node.DialOut(c, addr)
-	if pc.chain == nil {
+	pc.cn.DialOut(c, addr)
+	if pc.next == nil {
 		return c, nil
 	}
-	return pc.chain.DialOut(c, addr)
+	return pc.next.DialOut(c, addr)
 }

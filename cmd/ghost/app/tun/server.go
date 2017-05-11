@@ -10,12 +10,11 @@ type LocalNode interface {
 }
 
 type ProxyServer struct {
-	Node      LocalNode
-	Chain     *ProxyChain
+	ln        LocalNode
+	pc        *ProxyChain
 	TLSConfig *tls.Config
 }
 
-// func NewProxyServer(node *ProxyNode, config *tls.Config) *ProxyServer {
 func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxyServer {
 	if config == nil {
 		config = &tls.Config{}
@@ -36,13 +35,13 @@ func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxySer
 	}
 
 	return &ProxyServer{
-		Node:      n,
-		Chain:     pc,
+		ln:        n,
+		pc:        pc,
 		TLSConfig: config,
 	}
 }
 
 func (s *ProxyServer) ListenAndServe() error {
-	log.Printf("proxy server starting: %s\n", s.Node)
-	return s.Node.ListenAndServe(s.Chain)
+	log.Printf("proxy server starting: %s\n", s.ln)
+	return s.ln.ListenAndServe(s.pc)
 }

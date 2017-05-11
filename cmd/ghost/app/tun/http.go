@@ -14,19 +14,19 @@ import (
 )
 
 type HttpNode struct {
-	cn    *ProxyNode
+	pn    *ProxyNode
 	chain *ProxyChain
 }
 
-func NewHttpNode(cn *ProxyNode) *HttpNode {
+func NewHttpNode(pn *ProxyNode) *HttpNode {
 	return &HttpNode{
-		cn: cn,
+		pn: pn,
 	}
 }
 
 func (n *HttpNode) ListenAndServe(chain *ProxyChain) error {
 	n.chain = chain
-	return http.ListenAndServe(n.cn.URL.Host, n.GetHttpProxyHandlerWithProxy(true))
+	return http.ListenAndServe(n.pn.URL.Host, n.GetHttpProxyHandlerWithProxy(true))
 }
 
 func (n *HttpNode) GetHttpProxyHandlerWithProxy(verbose bool) http.Handler {
@@ -45,12 +45,12 @@ func (n *HttpNode) Dial(network, addr string) (net.Conn, error) {
 }
 
 func (n *HttpNode) GetProxyNode() *ProxyNode {
-	return n.cn
+	return n.pn
 }
 
 func (n *HttpNode) DialIn() (net.Conn, error) {
 	log.Printf("dial to chain node: %s\n", n)
-	c, err := net.Dial("tcp", n.cn.URL.Host)
+	c, err := net.Dial("tcp", n.pn.URL.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
 	}
@@ -78,8 +78,8 @@ func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
 		Header:     make(http.Header),
 	}
 	req.Header.Set("Proxy-Connection", "keep-alive")
-	if n.cn.URL.User != nil {
-		user := n.cn.URL.User
+	if n.pn.URL.User != nil {
+		user := n.pn.URL.User
 		s := user.String()
 		if _, set := user.Password(); !set {
 			s += ":"
@@ -108,7 +108,7 @@ func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
 }
 
 func (n *HttpNode) String() string {
-	return n.cn.String()
+	return n.pn.String()
 }
 
 // func NewHttpServer(conn net.Conn, base *ProxyServer) *HttpServer {
