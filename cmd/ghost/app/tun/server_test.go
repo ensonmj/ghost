@@ -7,16 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-
-	"github.com/elazarl/goproxy"
 )
-
-func GetHttpProxyHandler(verbose bool) http.Handler {
-	handler := goproxy.NewProxyHttpServer()
-	handler.Verbose = verbose
-
-	return handler
-}
 
 func TestHttpChainHttp(t *testing.T) {
 	// http server
@@ -27,7 +18,8 @@ func TestHttpChainHttp(t *testing.T) {
 	t.Logf("server addr: %s\n", srv.URL)
 
 	// http chained proxy server
-	cproxySrv := httptest.NewServer(GetHttpProxyHandler(true))
+	cn := NewHttpNode(&ProxyNode{})
+	cproxySrv := httptest.NewServer(cn.GetHttpProxyHandler(true))
 	defer cproxySrv.Close()
 
 	// http proxy server with chain
@@ -38,7 +30,7 @@ func TestHttpChainHttp(t *testing.T) {
 	}
 	n := NewHttpNode(&ProxyNode{})
 	n.pc = pc
-	proxySrv := httptest.NewServer(n.GetHttpProxyHandlerWithProxy(true))
+	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(true))
 	defer proxySrv.Close()
 	t.Logf("proxy addr: %s\n", proxySrv.URL)
 

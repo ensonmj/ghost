@@ -19,7 +19,7 @@ func TestGetHttpProxyHandlerWithProxy(t *testing.T) {
 
 	// http proxy server
 	n := NewHttpNode(&ProxyNode{})
-	proxySrv := httptest.NewServer(n.GetHttpProxyHandlerWithProxy(false))
+	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(false))
 	defer proxySrv.Close()
 
 	// http client

@@ -2,6 +2,7 @@ package tun
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/elazarl/goproxy"
 	"github.com/pkg/errors"
@@ -27,17 +29,23 @@ func NewHttpNode(pn *ProxyNode) *HttpNode {
 
 func (n *HttpNode) ListenAndServe(pc *ProxyChain) error {
 	n.pc = pc
-	return http.ListenAndServe(n.pn.URL.Host, n.GetHttpProxyHandlerWithProxy(true))
+	return http.ListenAndServe(n.pn.URL.Host, n.GetHttpProxyHandler(true))
 }
 
-func (n *HttpNode) GetHttpProxyHandlerWithProxy(verbose bool) http.Handler {
-	handler := goproxy.NewProxyHttpServer()
-	handler.Verbose = verbose
-	handler.Tr.MaxIdleConnsPerHost = 1000
-	handler.Tr.DisableKeepAlives = true
-	handler.Tr.Dial = n.Dial
-
-	return handler
+func (n *HttpNode) GetHttpProxyHandler(verbose bool) http.Handler {
+	return &goproxy.ProxyHttpServer{
+		Tr: &http.Transport{
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+			MaxIdleConnsPerHost: 1000,
+			DisableKeepAlives:   true,
+			Dial:                n.Dial,
+		},
+		NonproxyHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Error(w, "This is a proxy server. Does not respond to non-proxy requests.", 500)
+		}),
+		Verbose: verbose,
+		Logger:  log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds),
+	}
 }
 
 // Dial server or chain proxy
