@@ -31,13 +31,13 @@ func TestHttpChainHttp(t *testing.T) {
 	defer cproxySrv.Close()
 
 	// http proxy server with chain
-	chain, err := NewProxyChain(cproxySrv.URL)
+	pc, err := NewProxyChain(cproxySrv.URL)
 	t.Logf("chain addr: %s\n", cproxySrv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := NewHttpNode(&ProxyNode{})
-	n.chain = chain
+	n.pc = pc
 	proxySrv := httptest.NewServer(n.GetHttpProxyHandlerWithProxy(true))
 	defer proxySrv.Close()
 	t.Logf("proxy addr: %s\n", proxySrv.URL)

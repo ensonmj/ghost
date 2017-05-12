@@ -3,6 +3,7 @@ package tun
 import (
 	"bufio"
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -14,8 +15,8 @@ import (
 )
 
 type HttpNode struct {
-	pn    *ProxyNode
-	chain *ProxyChain
+	pn *ProxyNode
+	pc *ProxyChain
 }
 
 func NewHttpNode(pn *ProxyNode) *HttpNode {
@@ -24,8 +25,8 @@ func NewHttpNode(pn *ProxyNode) *HttpNode {
 	}
 }
 
-func (n *HttpNode) ListenAndServe(chain *ProxyChain) error {
-	n.chain = chain
+func (n *HttpNode) ListenAndServe(pc *ProxyChain) error {
+	n.pc = pc
 	return http.ListenAndServe(n.pn.URL.Host, n.GetHttpProxyHandlerWithProxy(true))
 }
 
@@ -41,7 +42,7 @@ func (n *HttpNode) GetHttpProxyHandlerWithProxy(verbose bool) http.Handler {
 
 // Dial server or chain proxy
 func (n *HttpNode) Dial(network, addr string) (net.Conn, error) {
-	return n.chain.Dial(network, addr)
+	return n.pc.Dial(network, addr)
 }
 
 func (n *HttpNode) GetProxyNode() *ProxyNode {
@@ -78,14 +79,8 @@ func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
 		Header:     make(http.Header),
 	}
 	req.Header.Set("Proxy-Connection", "keep-alive")
-	if n.pn.URL.User != nil {
-		user := n.pn.URL.User
-		s := user.String()
-		if _, set := user.Password(); !set {
-			s += ":"
-		}
-		req.Header.Set("Proxy-Authorization",
-			"Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
+	if authStr := n.encodeBasicAuth(); authStr != "" {
+		req.Header.Set("Proxy-Authorization", authStr)
 	}
 	if err := req.Write(c); err != nil {
 		return nil, err
@@ -107,143 +102,22 @@ func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
 	return c, nil
 }
 
-func (n *HttpNode) String() string {
-	return n.pn.String()
+func (n *HttpNode) encodeBasicAuth() string {
+	var authStr string
+	user := n.pn.URL.User
+	if user != nil {
+		s := user.String()
+		if _, set := user.Password(); !set {
+			s += ":"
+		}
+		authStr = "Basic " + base64.StdEncoding.EncodeToString([]byte(s))
+	}
+	return authStr
 }
 
-// func NewHttpServer(conn net.Conn, base *ProxyServer) *HttpServer {
-// 	return &HttpServer{
-// 		conn: conn,
-// 		Base: base,
-// 	}
-// }
-
-// func (s *HttpServer) Serve() {
-// 	req, err := http.ReadRequest(bufio.NewReader(s.conn))
-// 	if err != nil {
-// 		log.Printf("[http]: %s\n", err)
-// 		return
-// 	}
-// 	s.HandleRequest(req)
-// }
-
-// // Default HTTP server handler
-// func (s *HttpServer) HandleRequest(req *http.Request) {
-// 	log.Printf("[http] %s %s - %s %s\n", req.Method, s.conn.RemoteAddr(), req.Host, req.Proto)
-
-// 	if req.Method == "PRI" && req.ProtoMajor == 2 {
-// 		log.Printf("[http] %s <- %s : Not an HTTP2 server\n",
-// 			s.conn.RemoteAddr(), req.Host)
-// 		resp := "HTTP/1.1 400 Bad Request\r\n" +
-// 			"Proxy-Agent: ghost/" + Version + "\r\n\r\n"
-// 		s.conn.Write([]byte(resp))
-// 		return
-// 	}
-
-// 	valid := false
-// 	u, p, _ := basicProxyAuth(req.Header.Get("Proxy-Authorization"))
-// 	log.Println(u, p)
-// 	user := s.Base.Node.User
-// 	if user != nil {
-// 		username := user.Username()
-// 		password, _ := user.Password()
-// 		if (u == username && p == password) ||
-// 			(u == username && password == "") ||
-// 			(username == "" && p == password) {
-// 			valid = true
-// 		}
-
-// 		if !valid {
-// 			log.Printf("[http] %s <- %s : proxy authentication required\n",
-// 				s.conn.RemoteAddr(), req.Host)
-// 			resp := "HTTP/1.1 407 Proxy Authentication Required\r\n" +
-// 				"Proxy-Authenticate: Basic realm=\"ghost\"\r\n" +
-// 				"Proxy-Agent: ghost/" + Version + "\r\n\r\n"
-// 			s.conn.Write([]byte(resp))
-// 			return
-// 		}
-// 	}
-
-// 	req.Header.Del("Proxy-Authorization")
-
-// 	// forward http request
-// 	// lastNode := s.Base.Chain.lastNode
-// 	// if lastNode != nil && (lastNode.Protocol == "http" || lastNode.Protocol == "") {
-// 	// 	s.forwardRequest(req)
-// 	// 	return
-// 	// }
-
-// 	c, err := s.Base.Chain.Dial(req.Host)
-// 	if err != nil {
-// 		log.Printf("[http] %s -> %s : %s\n", s.conn.RemoteAddr(), req.Host, err)
-
-// 		b := []byte("HTTP/1.1 503 Service unavailable\r\n" +
-// 			"Proxy-Agent: ghost/" + Version + "\r\n\r\n")
-// 		log.Printf("[http] %s <- %s\n%s\n", s.conn.RemoteAddr(), req.Host, string(b))
-// 		s.conn.Write(b)
-// 		return
-// 	}
-// 	defer c.Close()
-
-// 	if req.Method == http.MethodConnect {
-// 		b := []byte("HTTP/1.1 200 Connection established\r\n" +
-// 			"Proxy-Agent: ghost/" + Version + "\r\n\r\n")
-// 		log.Printf("[http] %s <- %s\n%s\n", s.conn.RemoteAddr(), req.Host, string(b))
-// 		s.conn.Write(b)
-// 	} else {
-// 		req.Header.Del("Proxy-Connection")
-// 		req.Header.Set("Connection", "Keep-Alive")
-
-// 		if err = req.Write(c); err != nil {
-// 			log.Printf("[http] %s -> %s : %s\n", s.conn.RemoteAddr(), req.Host, err)
-// 			return
-// 		}
-// 	}
-
-// 	log.Printf("[http] %s <-> %s\n", s.conn.RemoteAddr(), req.Host)
-// 	s.Base.transport(s.conn, c)
-// 	log.Printf("[http] %s >-< %s\n", s.conn.RemoteAddr(), req.Host)
-// }
-
-// // func (s *HttpServer) forwardRequest(req *http.Request) {
-// // 	last := s.Base.Chain.lastNode
-// // 	if last == nil {
-// // 		return
-// // 	}
-// // 	cc, err := s.Base.Chain.GetConn()
-// // 	if err != nil {
-// // 		log.Printf("[http] %s -> %s : %s\n", s.conn.RemoteAddr(), last.Addr, err)
-
-// // 		b := []byte("HTTP/1.1 503 Service unavailable\r\n" +
-// // 			"Proxy-Agent: ghost/" + Version + "\r\n\r\n")
-// // 		log.Printf("[http] %s <- %s\n%s\n", s.conn.RemoteAddr(), last.Addr, string(b))
-// // 		s.conn.Write(b)
-// // 		return
-// // 	}
-// // 	defer cc.Close()
-
-// // 	if last.Users != nil {
-// // 		user := last.Users
-// // 		s := user.String()
-// // 		if _, set := user.Password(); !set {
-// // 			s += ":"
-// // 		}
-// // 		req.Header.Set("Proxy-Authorization",
-// // 			"Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
-// // 	}
-
-// // 	cc.SetWriteDeadline(time.Now().Add(WriteTimeout))
-// // 	if err = req.WriteProxy(cc); err != nil {
-// // 		log.Printf("[http] %s -> %s : %s\n", s.conn.RemoteAddr(), req.Host, err)
-// // 		return
-// // 	}
-// // 	cc.SetWriteDeadline(time.Time{})
-
-// // 	log.Printf("[http] %s <-> %s\n", s.conn.RemoteAddr(), req.Host)
-// // 	s.Base.transport(s.conn, cc)
-// // 	log.Printf("[http] %s >-< %s\n", s.conn.RemoteAddr(), req.Host)
-// // 	return
-// // }
+func (n *HttpNode) String() string {
+	return fmt.Sprintf("node:%s, chain:%s", n.pn, n.pc)
+}
 
 // type Http2Server struct {
 // 	Base      *ProxyServer

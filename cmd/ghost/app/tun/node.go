@@ -8,7 +8,7 @@ import (
 )
 
 type ProxyNode struct {
-	URL    *url.URL
+	URL    url.URL
 	RawURL string
 }
 
@@ -31,11 +31,11 @@ func ParseProxyNode(rawurl string) (*ProxyNode, error) {
 	switch url.Scheme {
 	case "http":
 	default:
-		return nil, errors.Errorf("Scheme:%s not support\n", url.Scheme)
+		return nil, errors.Errorf("scheme:%s not support\n", url.Scheme)
 	}
 
 	return &ProxyNode{
-		URL:    url,
+		URL:    *url,
 		RawURL: rawurl,
 	}, nil
 }
