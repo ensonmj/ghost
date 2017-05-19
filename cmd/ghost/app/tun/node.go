@@ -29,7 +29,9 @@ func ParseProxyNode(rawurl string) (*ProxyNode, error) {
 
 	// http/https/http2/socks5/tcp/udp/rtcp/rudp/ss/ws/wss
 	switch url.Scheme {
-	case "http":
+	case "http", "socks5":
+	case "socks":
+		url.Scheme = "socks5"
 	default:
 		return nil, errors.Errorf("scheme:%s not support\n", url.Scheme)
 	}

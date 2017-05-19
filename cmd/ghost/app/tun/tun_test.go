@@ -1,6 +1,7 @@
 package tun
 
 import (
+	"flag"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,7 +16,12 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	log.SetOutput(ioutil.Discard)
+	flag.Parse()
+	if testing.Verbose() {
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+	} else {
+		log.SetOutput(ioutil.Discard)
+	}
 }
 
 func teardown() {}
