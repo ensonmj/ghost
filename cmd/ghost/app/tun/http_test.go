@@ -1,22 +1,13 @@
 package tun
 
 import (
-	"crypto/tls"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 )
 
-func TestGetHttpProxyHandlerWithProxy(t *testing.T) {
-	// http server
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "success")
-	}))
-	defer srv.Close()
-
+func TestHttpProxyServer(t *testing.T) {
 	// http proxy server
 	n := NewHttpNode(&ProxyNode{})
 	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(false))
@@ -24,22 +15,8 @@ func TestGetHttpProxyHandlerWithProxy(t *testing.T) {
 
 	// http client
 	proxyUrl, _ := url.Parse(proxySrv.URL)
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyUrl),
-		},
-	}
-	resp, err := client.Get(srv.URL)
+	err := setupSrvAndClient(&http.Transport{Proxy: http.ProxyURL(proxyUrl)})
 	if err != nil {
 		t.Error(err)
-	}
-	txt, err := ioutil.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	if err != nil {
-		t.Error(err)
-	}
-	if string(txt) != "success" {
-		t.Errorf("expect success, but got %s\n", txt)
 	}
 }
