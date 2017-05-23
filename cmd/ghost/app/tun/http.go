@@ -38,7 +38,7 @@ func (n *HttpNode) GetHttpProxyHandler(verbose bool) http.Handler {
 			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 			MaxIdleConnsPerHost: 1000,
 			DisableKeepAlives:   true,
-			Dial:                n.Dial,
+			Dial:                n.dial,
 		},
 		NonproxyHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "This is a proxy server. Does not respond to non-proxy requests.", 500)
@@ -49,7 +49,7 @@ func (n *HttpNode) GetHttpProxyHandler(verbose bool) http.Handler {
 }
 
 // Dial server or chain proxy
-func (n *HttpNode) Dial(network, addr string) (net.Conn, error) {
+func (n *HttpNode) dial(network, addr string) (net.Conn, error) {
 	return n.pc.Dial(network, addr)
 }
 

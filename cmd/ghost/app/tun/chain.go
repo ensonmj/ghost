@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const DialTimeout = 1 * time.Second
@@ -24,13 +26,22 @@ type ProxyChain struct {
 }
 
 func (pc *ProxyChain) String() string {
+	if pc == nil {
+		return "<nil>"
+	}
+
 	var buf bytes.Buffer
 	buf.WriteString("&ProxyChain{")
 	if pc.cn == nil {
 		buf.WriteString("}")
+		return buf.String()
 	}
+
+	buf.WriteString(pc.cn.GetProxyNode().String())
 	if pc.next != nil {
 		buf.WriteString(pc.next.String())
+	} else {
+		buf.WriteString("}")
 	}
 	return buf.String()
 }
@@ -65,6 +76,10 @@ func NewProxyChain(nodes ...string) (*ProxyChain, error) {
 		switch pn.URL.Scheme {
 		case "http":
 			cn = NewHttpNode(pn)
+		case "socks5":
+			cn = NewSocks5Server(pn)
+		default:
+			return nil, errors.Errorf("unknown scheme:%s", pn.URL.Scheme)
 		}
 
 		chain.AddChainNode(cn)
@@ -75,7 +90,7 @@ func NewProxyChain(nodes ...string) (*ProxyChain, error) {
 
 func (pc *ProxyChain) Dial(network, addr string) (net.Conn, error) {
 	// nil chain is also workable
-	log.Printf("proxychian dial: %v\n", pc)
+	log.Printf("proxychian dial: %s\n", pc)
 	if pc == nil {
 		log.Println("no chain node, dial directly")
 		return net.DialTimeout(network, addr, DialTimeout)

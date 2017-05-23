@@ -11,8 +11,9 @@ func TestSocks5Server(t *testing.T) {
 	// socks5 proxy server
 	n, _ := ParseProxyNode("socks://127.0.0.1:8080")
 	proxySrv := NewSocks5Server(n)
-	ln := proxySrv.Listen()
-	go proxySrv.Serve(ln)
+	ln := proxySrv.listen()
+	defer ln.Close()
+	go proxySrv.serveOnce(ln)
 
 	// http client transport
 	dialer, err := proxy.FromURL(&n.URL, proxy.Direct)

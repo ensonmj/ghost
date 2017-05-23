@@ -2,6 +2,7 @@ package tun
 
 import (
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -30,59 +31,59 @@ const (
 // 	CmdUdpTun uint8 = 0xF3 // extended method for udp over tcp
 // )
 
-// type clientSelector struct {
-// 	methods   []uint8
-// 	user      *url.Userinfo
-// 	tlsConfig *tls.Config
-// }
+type clientSelector struct {
+	methods   []uint8
+	user      *url.Userinfo
+	tlsConfig *tls.Config
+}
 
-// func (selector *clientSelector) Methods() []uint8 {
-// 	return selector.methods
-// }
+func (selector *clientSelector) Methods() []uint8 {
+	return selector.methods
+}
 
-// func (selector *clientSelector) Select(methods ...uint8) (method uint8) {
-// 	return
-// }
+func (selector *clientSelector) Select(methods ...uint8) (method uint8) {
+	return
+}
 
-// func (selector *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, error) {
-// 	switch method {
-// 	case MethodTLS:
-// 		conn = tls.Client(conn, selector.tlsConfig)
+func (selector *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, error) {
+	switch method {
+	case MethodTLS:
+		conn = tls.Client(conn, selector.tlsConfig)
 
-// 	case gosocks5.MethodUserPass, MethodTLSAuth:
-// 		if method == MethodTLSAuth {
-// 			conn = tls.Client(conn, selector.tlsConfig)
-// 		}
+	case gosocks5.MethodUserPass, MethodTLSAuth:
+		if method == MethodTLSAuth {
+			conn = tls.Client(conn, selector.tlsConfig)
+		}
 
-// 		var username, password string
-// 		if selector.user != nil {
-// 			username = selector.user.Username()
-// 			password, _ = selector.user.Password()
-// 		}
+		var username, password string
+		if selector.user != nil {
+			username = selector.user.Username()
+			password, _ = selector.user.Password()
+		}
 
-// 		req := gosocks5.NewUserPassRequest(gosocks5.UserPassVer, username, password)
-// 		if err := req.Write(conn); err != nil {
-// 			log.Println("socks5 auth:", err)
-// 			return nil, err
-// 		}
-// 		log.Println(req)
+		req := gosocks5.NewUserPassRequest(gosocks5.UserPassVer, username, password)
+		if err := req.Write(conn); err != nil {
+			log.Println("socks5 auth:", err)
+			return nil, err
+		}
+		log.Println(req)
 
-// 		resp, err := gosocks5.ReadUserPassResponse(conn)
-// 		if err != nil {
-// 			log.Println("socks5 auth:", err)
-// 			return nil, err
-// 		}
-// 		log.Println(resp)
+		resp, err := gosocks5.ReadUserPassResponse(conn)
+		if err != nil {
+			log.Println("socks5 auth:", err)
+			return nil, err
+		}
+		log.Println(resp)
 
-// 		if resp.Status != gosocks5.Succeeded {
-// 			return nil, gosocks5.ErrAuthFailure
-// 		}
-// 	case gosocks5.MethodNoAcceptable:
-// 		return nil, gosocks5.ErrBadMethod
-// 	}
+		if resp.Status != gosocks5.Succeeded {
+			return nil, gosocks5.ErrAuthFailure
+		}
+	case gosocks5.MethodNoAcceptable:
+		return nil, gosocks5.ErrBadMethod
+	}
 
-// 	return conn, nil
-// }
+	return conn, nil
+}
 
 type serverSelector struct {
 	methods   []uint8
@@ -189,19 +190,20 @@ func NewSocks5Server(pn *ProxyNode) *Socks5Server {
 				MethodTLS,
 				MethodTLSAuth,
 			},
-			// user:      base.Node.User,
-			// tlsConfig: base.TLSConfig,
 		},
 	}
 }
 
-func (n *Socks5Server) ListenAndServe(pc *ProxyChain) {
-	n.pc = pc
-	ln := n.Listen()
-	n.Serve(ln)
+func (n *Socks5Server) String() string {
+	return fmt.Sprintf("node:%s, chain:%s", n.pn, n.pc)
 }
 
-func (n *Socks5Server) Listen() net.Listener {
+func (n *Socks5Server) ListenAndServe(pc *ProxyChain) {
+	n.pc = pc
+	n.serve(n.listen())
+}
+
+func (n *Socks5Server) listen() net.Listener {
 	ln, err := net.Listen("tcp", n.pn.URL.Host)
 	if err != nil {
 		panic(errors.Wrap(err, "socks server listen"))
@@ -209,42 +211,48 @@ func (n *Socks5Server) Listen() net.Listener {
 	return ln
 }
 
-func (n *Socks5Server) Serve(ln net.Listener) {
+func (n *Socks5Server) serve(ln net.Listener) {
 	defer ln.Close()
 	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			continue
-		}
-
-		go func() {
-			conn := gosocks5.ServerConn(conn, n.selector)
-			req, err := gosocks5.ReadRequest(conn)
-			if err != nil {
-				log.Printf("[socks5]: %s\n", err)
-				return
-			}
-			log.Printf("[socks5] %s -> %s\n%s\n", conn.RemoteAddr(), req.Addr, req)
-
-			switch req.Cmd {
-			case gosocks5.CmdConnect:
-				log.Printf("[socks5-connect] %s -> %s\n", conn.RemoteAddr(), req.Addr)
-				n.handleConnect(conn, req)
-			// case gosocks5.CmdBind:
-			// 	log.Printf("[socks5-bind] %s - %s\n", conn.RemoteAddr(), req.Addr)
-			// 	n.handleBind(req)
-			// case gosocks5.CmdUdp:
-			// 	log.Printf("[socks5-udp] %s - %s\n", conn.RemoteAddr(), req.Addr)
-			// 	n.handleUDPRelay(req)
-			// case CmdUdpTun:
-			// 	log.Printf("[socks5-udp] %s - %s\n", conn.RemoteAddr(), req.Addr)
-			// 	n.handleUDPTunnel(req)
-			default:
-				log.Println("[socks5] Unrecognized request:", req.Cmd)
-			}
-			return
-		}()
+		n.serveOnce(ln)
 	}
+}
+
+func (n *Socks5Server) serveOnce(ln net.Listener) {
+	conn, err := ln.Accept()
+	if err != nil {
+		return
+	}
+
+	go func() {
+		log.Printf("[socks5] %s -> %s\n", conn.RemoteAddr(), conn.LocalAddr())
+		// conn := gosocks5.ServerConn(conn, n.selector)
+		conn := gosocks5.ServerConn(conn, nil)
+		req, err := gosocks5.ReadRequest(conn)
+		if err != nil {
+			log.Printf("[socks5]: %s\n", err)
+			return
+		}
+		log.Printf("[socks5] %s -> %s\n%s\n", conn.RemoteAddr(), req.Addr, req)
+
+		switch req.Cmd {
+		case gosocks5.CmdConnect:
+			log.Printf("[socks5-connect] %s -> %s\n", conn.RemoteAddr(), req.Addr)
+			n.handleConnect(conn, req)
+		// case gosocks5.CmdBind:
+		// 	log.Printf("[socks5-bind] %s - %s\n", conn.RemoteAddr(), req.Addr)
+		// 	n.handleBind(req)
+		// case gosocks5.CmdUdp:
+		// 	log.Printf("[socks5-udp] %s - %s\n", conn.RemoteAddr(), req.Addr)
+		// 	n.handleUDPRelay(req)
+		// case CmdUdpTun:
+		// 	log.Printf("[socks5-udp] %s - %s\n", conn.RemoteAddr(), req.Addr)
+		// 	n.handleUDPTunnel(req)
+		default:
+			log.Println("[socks5] Unrecognized request:", req.Cmd)
+		}
+		return
+	}()
 }
 
 // Dial server or chain proxy
@@ -267,22 +275,37 @@ func (n *Socks5Server) DialIn() (net.Conn, error) {
 }
 
 func (n *Socks5Server) DialOut(c net.Conn, addr string) (net.Conn, error) {
-	log.Printf("handshake with chain node: %s\n", n)
+	log.Printf("handshake with chain node: %s in conn:%s -> %s\n", n,
+		c.LocalAddr(), c.RemoteAddr())
+	selector := &clientSelector{
+		methods: []uint8{
+			gosocks5.MethodNoAuth,
+			gosocks5.MethodUserPass,
+		},
+	}
+	conn := gosocks5.ClientConn(c, selector)
+	if err := conn.Handleshake(); err != nil {
+		return nil, errors.Wrap(err, "handleshake")
+	}
+
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse addr")
 	}
 	p, _ := strconv.Atoi(port)
 	req := gosocks5.NewRequest(gosocks5.CmdConnect, &gosocks5.Addr{
-		Type: gosocks5.AddrDomain,
+		// Type: gosocks5.AddrDomain,
+		Type: gosocks5.AddrIPv4,
 		Host: host,
 		Port: uint16(p),
 	})
+	log.Println(req.String())
 	if err := req.Write(c); err != nil {
 		return nil, errors.Wrap(err, "write socks connect")
 	}
 
 	resp, err := gosocks5.ReadReply(c)
+	log.Println("readReply")
 	if err != nil {
 		return nil, errors.Wrap(err, "read socks reply")
 	}
