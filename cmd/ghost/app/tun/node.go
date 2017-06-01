@@ -29,7 +29,7 @@ func ParseProxyNode(rawurl string) (*ProxyNode, error) {
 
 	// http/https/http2/socks5/tcp/udp/rtcp/rudp/ss/ws/wss
 	switch url.Scheme {
-	case "http", "socks5":
+	case "http", "socks5", "quic":
 	case "socks":
 		url.Scheme = "socks5"
 	default:

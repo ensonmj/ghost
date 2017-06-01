@@ -78,6 +78,8 @@ func NewProxyChain(nodes ...string) (*ProxyChain, error) {
 			cn = NewHttpNode(pn)
 		case "socks5":
 			cn = NewSocks5Server(pn)
+		case "quic":
+			cn = NewQuicServer(pn, nil)
 		default:
 			return nil, errors.Errorf("unknown scheme:%s", pn.URL.Scheme)
 		}

@@ -22,8 +22,6 @@ func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxySer
 
 	var n LocalNode
 	switch pn.URL.Scheme {
-	// case "socks":
-	// 	return NewSocks5Server(cn)
 	// case "tcp", "udp":
 	// 	// local port forward: -L tcp://:2222/192.168.1.1:22
 	// 	cn.Remote = strings.Trim(u.EscapedPath(), "/")
@@ -32,6 +30,10 @@ func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxySer
 	// 	cn.Remote = strings.Trim(u.EscapedPath(), "/")
 	case "http":
 		n = NewHttpNode(pn)
+	case "socks5":
+		n = NewSocks5Server(pn)
+	case "quic":
+		n = NewQuicServer(pn, config)
 	}
 
 	return &ProxyServer{

@@ -198,9 +198,10 @@ func (n *Socks5Server) String() string {
 	return fmt.Sprintf("node:%s, chain:%s", n.pn, n.pc)
 }
 
-func (n *Socks5Server) ListenAndServe(pc *ProxyChain) {
+func (n *Socks5Server) ListenAndServe(pc *ProxyChain) error {
 	n.pc = pc
 	n.serve(n.listen())
+	return nil
 }
 
 func (n *Socks5Server) listen() net.Listener {
