@@ -12,11 +12,13 @@ import (
 const DialTimeout = 1 * time.Second
 
 type ChainNode interface {
-	GetProxyNode() *ProxyNode
-	// First node need DialIn
-	DialIn() (net.Conn, error)
-	// Others need DialOut
-	DialOut(c net.Conn, addr string) (net.Conn, error)
+	String() string
+	// First node need Connect
+	Connect() (net.Conn, error)
+	// Handshake complete authentication with node
+	Handshake(c net.Conn) error
+	// ForwardRequest ask node to connect next hop
+	ForwardRequest(c net.Conn, addr string) error
 }
 
 // Proxy chain holds a list of proxy nodes
@@ -37,7 +39,7 @@ func (pc *ProxyChain) String() string {
 		return buf.String()
 	}
 
-	buf.WriteString(pc.cn.GetProxyNode().String())
+	buf.WriteString(pc.cn.String())
 	if pc.next != nil {
 		buf.WriteString(pc.next.String())
 	} else {
@@ -91,29 +93,38 @@ func NewProxyChain(nodes ...string) (*ProxyChain, error) {
 }
 
 func (pc *ProxyChain) Dial(network, addr string) (net.Conn, error) {
-	// nil chain is also workable
-	log.Printf("proxychian dial: %s\n", pc)
+	log.Printf("connect to chian: %s\n", pc)
 	if pc == nil {
-		log.Println("no chain node, dial directly")
+		// nil chain is also workable
 		return net.DialTimeout(network, addr, DialTimeout)
 	}
 
-	c, err := pc.DialIn()
+	c, err := pc.Connect()
 	if err != nil {
 		return nil, err
 	}
 
-	return pc.DialOut(c, addr)
-}
-
-func (pc *ProxyChain) DialIn() (net.Conn, error) {
-	return net.DialTimeout("tcp", pc.cn.GetProxyNode().URL.Host, DialTimeout)
-}
-
-func (pc *ProxyChain) DialOut(c net.Conn, addr string) (net.Conn, error) {
-	pc.cn.DialOut(c, addr)
-	if pc.next == nil {
-		return c, nil
+	err = pc.Handshake(c, addr)
+	if err != nil {
+		return nil, err
 	}
-	return pc.next.DialOut(c, addr)
+
+	return c, nil
+}
+
+func (pc *ProxyChain) Connect() (net.Conn, error) {
+	return pc.cn.Connect()
+}
+
+func (pc *ProxyChain) Handshake(c net.Conn, addr string) error {
+	pc.cn.Handshake(c)
+	err := pc.cn.ForwardRequest(c, addr)
+	if err != nil {
+		return err
+	}
+	if pc.next == nil {
+		return nil
+	}
+
+	return pc.next.Handshake(c, addr)
 }

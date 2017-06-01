@@ -194,10 +194,6 @@ func NewSocks5Server(pn *ProxyNode) *Socks5Server {
 	}
 }
 
-func (n *Socks5Server) String() string {
-	return fmt.Sprintf("node:%s, chain:%s", n.pn, n.pc)
-}
-
 func (n *Socks5Server) ListenAndServe(pc *ProxyChain) error {
 	n.pc = pc
 	n.serve(n.listen())
@@ -261,21 +257,21 @@ func (n *Socks5Server) Dial(network, addr string) (net.Conn, error) {
 	return n.pc.Dial(network, addr)
 }
 
-func (n *Socks5Server) GetProxyNode() *ProxyNode {
-	return n.pn
+func (n *Socks5Server) String() string {
+	return fmt.Sprintf("%s", n.pn)
 }
 
-func (n *Socks5Server) DialIn() (net.Conn, error) {
-	log.Printf("dial to chain node: %s\n", n)
+func (n *Socks5Server) Connect() (net.Conn, error) {
+	log.Printf("connect to chain first node: %s\n", n)
 	c, err := net.Dial("tcp", n.pn.URL.Host)
 	if err != nil {
-		return nil, errors.Wrap(err, "")
+		return nil, errors.WithStack(err)
 	}
 
 	return c, nil
 }
 
-func (n *Socks5Server) DialOut(c net.Conn, addr string) (net.Conn, error) {
+func (n *Socks5Server) Handshake(c net.Conn) error {
 	log.Printf("handshake with chain node: %s in conn:%s -> %s\n", n,
 		c.LocalAddr(), c.RemoteAddr())
 	selector := &clientSelector{
@@ -286,12 +282,16 @@ func (n *Socks5Server) DialOut(c net.Conn, addr string) (net.Conn, error) {
 	}
 	conn := gosocks5.ClientConn(c, selector)
 	if err := conn.Handleshake(); err != nil {
-		return nil, errors.Wrap(err, "handleshake")
+		return errors.Wrap(err, "handleshake")
 	}
 
+	return nil
+}
+
+func (n *Socks5Server) ForwardRequest(c net.Conn, addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return nil, errors.Wrap(err, "parse addr")
+		return errors.Wrap(err, "parse addr")
 	}
 	p, _ := strconv.Atoi(port)
 	req := gosocks5.NewRequest(gosocks5.CmdConnect, &gosocks5.Addr{
@@ -302,19 +302,19 @@ func (n *Socks5Server) DialOut(c net.Conn, addr string) (net.Conn, error) {
 	})
 	log.Println(req.String())
 	if err := req.Write(c); err != nil {
-		return nil, errors.Wrap(err, "write socks connect")
+		return errors.Wrap(err, "write socks connect")
 	}
 
 	resp, err := gosocks5.ReadReply(c)
 	log.Println("readReply")
 	if err != nil {
-		return nil, errors.Wrap(err, "read socks reply")
+		return errors.Wrap(err, "read socks reply")
 	}
 	if resp.Rep != gosocks5.Succeeded {
-		return nil, errors.New("proxy refused connection")
+		return errors.New("proxy refused connection")
 	}
 
-	return c, nil
+	return nil
 }
 
 func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {

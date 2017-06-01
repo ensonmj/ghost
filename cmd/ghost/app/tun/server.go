@@ -3,10 +3,12 @@ package tun
 import (
 	"crypto/tls"
 	"log"
+	"net"
 )
 
 type LocalNode interface {
 	ListenAndServe(*ProxyChain) error
+	Dial(network, addr string) (net.Conn, error)
 }
 
 type ProxyServer struct {

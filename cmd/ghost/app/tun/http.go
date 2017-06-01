@@ -38,7 +38,7 @@ func (n *HttpNode) GetHttpProxyHandler(verbose bool) http.Handler {
 			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 			MaxIdleConnsPerHost: 1000,
 			DisableKeepAlives:   true,
-			Dial:                n.dial,
+			Dial:                n.Dial,
 		},
 		NonproxyHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "This is a proxy server. Does not respond to non-proxy requests.", 500)
@@ -49,33 +49,29 @@ func (n *HttpNode) GetHttpProxyHandler(verbose bool) http.Handler {
 }
 
 // Dial server or chain proxy
-func (n *HttpNode) dial(network, addr string) (net.Conn, error) {
+func (n *HttpNode) Dial(network, addr string) (net.Conn, error) {
 	return n.pc.Dial(network, addr)
 }
 
-func (n *HttpNode) GetProxyNode() *ProxyNode {
-	return n.pn
+func (n *HttpNode) String() string {
+	return fmt.Sprintf("%s", n.pn)
 }
 
-func (n *HttpNode) DialIn() (net.Conn, error) {
-	log.Printf("dial to chain node: %s\n", n)
+func (n *HttpNode) Connect() (net.Conn, error) {
+	log.Printf("connect to chain first node: %s\n", n)
 	c, err := net.Dial("tcp", n.pn.URL.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
 	}
 
-	// if n.cn.URL.Scheme == "https" {
-	// 	cfg := &tls.Config{
-	// 	// InsecureSkipVerify: n.Node.insecureSkipVerify(),
-	// 	// ServerName:         n.Node.serverName,
-	// 	}
-	// 	c = tls.Client(c, cfg)
-	// }
-
 	return c, nil
 }
 
-func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
+func (n *HttpNode) Handshake(c net.Conn) error {
+	return nil
+}
+
+func (n *HttpNode) ForwardRequest(c net.Conn, addr string) error {
 	// use CONNECT to create tunnel
 	log.Printf("handshake with chain node: %s\n", n)
 	req := &http.Request{
@@ -91,23 +87,23 @@ func (n *HttpNode) DialOut(c net.Conn, addr string) (net.Conn, error) {
 		req.Header.Set("Proxy-Authorization", authStr)
 	}
 	if err := req.Write(c); err != nil {
-		return nil, err
+		return errors.Wrap(err, "forward request")
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(c), req)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "forward request read response")
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, err
+			return errors.Wrap(err, "forward request clear body")
 		}
 		c.Close()
-		return nil, errors.New("proxy refused connection" + string(resp))
+		return errors.New("proxy refused connection" + string(resp))
 	}
 
-	return c, nil
+	return nil
 }
 
 func (n *HttpNode) encodeBasicAuth() string {
@@ -121,10 +117,6 @@ func (n *HttpNode) encodeBasicAuth() string {
 		authStr = "Basic " + base64.StdEncoding.EncodeToString([]byte(s))
 	}
 	return authStr
-}
-
-func (n *HttpNode) String() string {
-	return fmt.Sprintf("node:%s, chain:%s", n.pn, n.pc)
 }
 
 // type Http2Server struct {

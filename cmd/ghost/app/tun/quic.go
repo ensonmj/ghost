@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -46,12 +47,12 @@ func (n *QuicServer) Dial(network, addr string) (net.Conn, error) {
 	return n.pc.Dial(network, addr)
 }
 
-func (n *QuicServer) GetProxyNode() *ProxyNode {
-	return n.pn
+func (n *QuicServer) String() string {
+	return fmt.Sprintf("%s", n.pn)
 }
 
-func (n *QuicServer) DialIn() (net.Conn, error) {
-	log.Printf("dial to chain node: %s\n", n)
+func (n *QuicServer) Connect() (net.Conn, error) {
+	log.Printf("connect to chain first node: %s\n", n)
 	c, err := net.Dial("tcp", n.pn.URL.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
@@ -60,7 +61,11 @@ func (n *QuicServer) DialIn() (net.Conn, error) {
 	return c, nil
 }
 
-func (n *QuicServer) DialOut(c net.Conn, addr string) (net.Conn, error) {
+func (n *QuicServer) Handshake(c net.Conn) error {
+	return nil
+}
+
+func (n *QuicServer) ForwardRequest(c net.Conn, addr string) error {
 	// use CONNECT to create tunnel
 	log.Printf("handshake with chain node: %s in conn:%s -> %s\n", n,
 		c.LocalAddr(), c.RemoteAddr())
@@ -77,23 +82,23 @@ func (n *QuicServer) DialOut(c net.Conn, addr string) (net.Conn, error) {
 		req.Header.Set("Proxy-Authorization", authStr)
 	}
 	if err := req.Write(c); err != nil {
-		return nil, err
+		return errors.Wrap(err, "forward request")
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(c), req)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "forward request read response")
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, err
+			return errors.Wrap(err, "forward request clear body")
 		}
 		c.Close()
-		return nil, errors.New("proxy refused connection" + string(resp))
+		return errors.New("proxy refused connection" + string(resp))
 	}
 
-	return c, nil
+	return nil
 }
 
 func (n *QuicServer) encodeBasicAuth() string {
@@ -166,7 +171,6 @@ func (fw flushWriter) Write(p []byte) (n int, err error) {
 
 	n, err = fw.w.Write(p)
 	if err != nil {
-		// glog.V(LWARNING).Infoln("flush writer:", err)
 		return
 	}
 	if f, ok := fw.w.(http.Flusher); ok {
