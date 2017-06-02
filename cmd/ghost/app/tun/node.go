@@ -1,6 +1,7 @@
 package tun
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 
@@ -40,4 +41,17 @@ func ParseProxyNode(rawurl string) (*ProxyNode, error) {
 		URL:    *url,
 		RawURL: rawurl,
 	}, nil
+}
+
+func (pn *ProxyNode) EncodeBasicAuth() string {
+	var authStr string
+	user := pn.URL.User
+	if user != nil {
+		s := user.String()
+		if _, set := user.Password(); !set {
+			s += ":"
+		}
+		authStr = "Basic " + base64.StdEncoding.EncodeToString([]byte(s))
+	}
+	return authStr
 }

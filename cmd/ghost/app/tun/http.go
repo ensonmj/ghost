@@ -3,7 +3,6 @@ package tun
 import (
 	"bufio"
 	"crypto/tls"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -83,7 +82,7 @@ func (n *HttpNode) ForwardRequest(c net.Conn, addr string) error {
 		Header:     make(http.Header),
 	}
 	req.Header.Set("Proxy-Connection", "keep-alive")
-	if authStr := n.encodeBasicAuth(); authStr != "" {
+	if authStr := n.pn.EncodeBasicAuth(); authStr != "" {
 		req.Header.Set("Proxy-Authorization", authStr)
 	}
 	if err := req.Write(c); err != nil {
@@ -104,19 +103,6 @@ func (n *HttpNode) ForwardRequest(c net.Conn, addr string) error {
 	}
 
 	return nil
-}
-
-func (n *HttpNode) encodeBasicAuth() string {
-	var authStr string
-	user := n.pn.URL.User
-	if user != nil {
-		s := user.String()
-		if _, set := user.Password(); !set {
-			s += ":"
-		}
-		authStr = "Basic " + base64.StdEncoding.EncodeToString([]byte(s))
-	}
-	return authStr
 }
 
 // type Http2Server struct {
