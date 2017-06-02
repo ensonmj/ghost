@@ -238,7 +238,7 @@ func (n *Socks5Server) serveOnce(ln net.Listener) {
 			n.handleConnect(conn, req)
 		// case gosocks5.CmdBind:
 		// 	log.Printf("[socks5-bind] %s - %s\n", conn.RemoteAddr(), req.Addr)
-		// 	n.handleBind(req)
+		// 	n.handleBind(conn, req)
 		// case gosocks5.CmdUdp:
 		// 	log.Printf("[socks5-udp] %s - %s\n", conn.RemoteAddr(), req.Addr)
 		// 	n.handleUDPRelay(req)
@@ -289,18 +289,11 @@ func (n *Socks5Server) Handshake(c net.Conn) error {
 }
 
 func (n *Socks5Server) ForwardRequest(c net.Conn, addr string) error {
-	host, port, err := net.SplitHostPort(addr)
+	saddr, err := parseAddr(addr)
 	if err != nil {
-		return errors.Wrap(err, "parse addr")
+		return err
 	}
-	p, _ := strconv.Atoi(port)
-	req := gosocks5.NewRequest(gosocks5.CmdConnect, &gosocks5.Addr{
-		// Type: gosocks5.AddrDomain,
-		Type: gosocks5.AddrIPv4,
-		Host: host,
-		Port: uint16(p),
-	})
-	log.Println(req.String())
+	req := gosocks5.NewRequest(gosocks5.CmdConnect, saddr)
 	if err := req.Write(c); err != nil {
 		return errors.Wrap(err, "write socks connect")
 	}
@@ -328,7 +321,8 @@ func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {
 	}
 	defer cc.Close()
 
-	rep := gosocks5.NewReply(gosocks5.Succeeded, nil)
+	saddr, _ := parseAddr(cc.LocalAddr().String())
+	rep := gosocks5.NewReply(gosocks5.Succeeded, saddr)
 	if err := rep.Write(c); err != nil {
 		log.Printf("[socks5-connect] %s <- %s : %s\n", c.RemoteAddr(), req.Addr, err)
 		return
@@ -338,6 +332,55 @@ func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {
 	log.Printf("[socks5-connect] %s <-> %s\n", c.RemoteAddr(), req.Addr)
 	Connect(cc, c)
 	log.Printf("[socks5-connect] %s >-< %s\n", c.RemoteAddr(), req.Addr)
+}
+
+// func (s *Socks5Server) handleBind(c net.Conn, req *gosocks5.Request) {
+// 	cc, err := n.Dial("tcp", req.Addr.String())
+// 	// connection error
+// 	if err != nil {
+// 		log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), req.Addr, err)
+// 		reply := gosocks5.NewReply(gosocks5.Failure, nil)
+// 		reply.Write(c)
+// 		log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), req.Addr, reply)
+// 		return
+// 	}
+
+// 	// serve socks5 bind
+// 	if err == ErrEmptyChain {
+// 		s.bindOn(req.Addr.String())
+// 		return
+// 	}
+
+// 	defer cc.Close()
+// 	// forward request
+// 	req.Write(cc)
+
+// 	log.Printf("[socks5-bind] %s <-> %s\n", s.conn.RemoteAddr(), cc.RemoteAddr())
+// 	s.Base.transport(s.conn, cc)
+// 	log.Printf("[socks5-bind] %s >-< %s\n", s.conn.RemoteAddr(), cc.RemoteAddr())
+// }
+
+func parseAddr(addr string) (*gosocks5.Addr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	var typ uint8
+	if ip := net.ParseIP(host); ip == nil {
+		typ = gosocks5.AddrDomain
+	} else {
+		if ip4 := ip.To4(); ip4 != nil {
+			typ = gosocks5.AddrIPv4
+		} else {
+			typ = gosocks5.AddrIPv6
+		}
+	}
+	p, _ := strconv.Atoi(port)
+	return &gosocks5.Addr{
+		Type: typ,
+		Host: host,
+		Port: uint16(p),
+	}, nil
 }
 
 func Connect(c1, c2 net.Conn) {
@@ -360,30 +403,90 @@ func Connect(c1, c2 net.Conn) {
 	return
 }
 
-// func (s *Socks5Server) handleBind(req *gosocks5.Request) {
-// 	cc, err := s.Base.Chain.GetConn()
-
-// 	// connection error
-// 	if err != nil && err != ErrEmptyChain {
-// 		log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), req.Addr, err)
-// 		reply := gosocks5.NewReply(gosocks5.Failure, nil)
-// 		reply.Write(s.conn)
-// 		log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), req.Addr, reply)
-// 		return
-// 	}
-// 	// serve socks5 bind
-// 	if err == ErrEmptyChain {
-// 		s.bindOn(req.Addr.String())
+// func (s *Socks5Server) bindOn(addr string) {
+// 	bindAddr, _ := net.ResolveTCPAddr("tcp", addr)
+// 	ln, err := net.ListenTCP("tcp", bindAddr) // strict mode: if the port already in use, it will return error
+// 	if err != nil {
+// 		log.Printf("[socks5-bind] %s -> %s : %s\n", s.conn.RemoteAddr(), addr, err)
+// 		gosocks5.NewReply(gosocks5.Failure, nil).Write(s.conn)
 // 		return
 // 	}
 
-// 	defer cc.Close()
-// 	// forward request
-// 	req.Write(cc)
+// 	socksAddr := ToSocksAddr(ln.Addr())
+// 	// Issue: may not reachable when host has multi-interface
+// 	socksAddr.Host, _, _ = net.SplitHostPort(s.conn.LocalAddr().String())
+// 	reply := gosocks5.NewReply(gosocks5.Succeeded, socksAddr)
+// 	if err := reply.Write(s.conn); err != nil {
+// 		log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
+// 		ln.Close()
+// 		return
+// 	}
+// 	log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), addr, reply)
+// 	log.Printf("[socks5-bind] %s - %s BIND ON %s OK\n", s.conn.RemoteAddr(), addr, socksAddr)
 
-// 	log.Printf("[socks5-bind] %s <-> %s\n", s.conn.RemoteAddr(), cc.RemoteAddr())
-// 	s.Base.transport(s.conn, cc)
-// 	log.Printf("[socks5-bind] %s >-< %s\n", s.conn.RemoteAddr(), cc.RemoteAddr())
+// 	var pconn net.Conn
+// 	accept := func() <-chan error {
+// 		errc := make(chan error, 1)
+
+// 		go func() {
+// 			defer close(errc)
+// 			defer ln.Close()
+
+// 			c, err := ln.AcceptTCP()
+// 			if err != nil {
+// 				errc <- err
+// 				return
+// 			}
+// 			pconn = c
+// 		}()
+
+// 		return errc
+// 	}
+
+// 	pc1, pc2 := net.Pipe()
+// 	pipe := func() <-chan error {
+// 		errc := make(chan error, 1)
+
+// 		go func() {
+// 			defer close(errc)
+// 			defer pc1.Close()
+
+// 			errc <- s.Base.transport(s.conn, pc1)
+// 		}()
+
+// 		return errc
+// 	}
+
+// 	defer pc2.Close()
+
+// 	for {
+// 		select {
+// 		case err := <-accept():
+// 			if err != nil || pconn == nil {
+// 				log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
+// 				return
+// 			}
+// 			defer pconn.Close()
+
+// 			reply := gosocks5.NewReply(gosocks5.Succeeded, ToSocksAddr(pconn.RemoteAddr()))
+// 			if err := reply.Write(pc2); err != nil {
+// 				log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
+// 			}
+// 			log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), addr, reply)
+// 			log.Printf("[socks5-bind] %s <- %s PEER %s ACCEPTED\n", s.conn.RemoteAddr(), socksAddr, pconn.RemoteAddr())
+
+// 			log.Printf("[socks5-bind] %s <-> %s\n", s.conn.RemoteAddr(), pconn.RemoteAddr())
+// 			if err = s.Base.transport(pc2, pconn); err != nil {
+// 				log.Println(err)
+// 			}
+// 			log.Printf("[socks5-bind] %s >-< %s\n", s.conn.RemoteAddr(), pconn.RemoteAddr())
+// 			return
+// 		case err := <-pipe():
+// 			log.Printf("[socks5-bind] %s -> %s : %v\n", s.conn.RemoteAddr(), addr, err)
+// 			ln.Close()
+// 			return
+// 		}
+// 	}
 // }
 
 // func (s *Socks5Server) handleUDPRelay(req *gosocks5.Request) {
@@ -515,92 +618,6 @@ func Connect(c1, c2 net.Conn) {
 // 	log.Printf("[socks5-udp] %s <-> %s [tun]\n", s.conn.RemoteAddr(), cc.RemoteAddr())
 // 	s.Base.transport(s.conn, cc)
 // 	log.Printf("[socks5-udp] %s >-< %s [tun]\n", s.conn.RemoteAddr(), cc.RemoteAddr())
-// }
-
-// func (s *Socks5Server) bindOn(addr string) {
-// 	bindAddr, _ := net.ResolveTCPAddr("tcp", addr)
-// 	ln, err := net.ListenTCP("tcp", bindAddr) // strict mode: if the port already in use, it will return error
-// 	if err != nil {
-// 		log.Printf("[socks5-bind] %s -> %s : %s\n", s.conn.RemoteAddr(), addr, err)
-// 		gosocks5.NewReply(gosocks5.Failure, nil).Write(s.conn)
-// 		return
-// 	}
-
-// 	socksAddr := ToSocksAddr(ln.Addr())
-// 	// Issue: may not reachable when host has multi-interface
-// 	socksAddr.Host, _, _ = net.SplitHostPort(s.conn.LocalAddr().String())
-// 	reply := gosocks5.NewReply(gosocks5.Succeeded, socksAddr)
-// 	if err := reply.Write(s.conn); err != nil {
-// 		log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
-// 		ln.Close()
-// 		return
-// 	}
-// 	log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), addr, reply)
-// 	log.Printf("[socks5-bind] %s - %s BIND ON %s OK\n", s.conn.RemoteAddr(), addr, socksAddr)
-
-// 	var pconn net.Conn
-// 	accept := func() <-chan error {
-// 		errc := make(chan error, 1)
-
-// 		go func() {
-// 			defer close(errc)
-// 			defer ln.Close()
-
-// 			c, err := ln.AcceptTCP()
-// 			if err != nil {
-// 				errc <- err
-// 				return
-// 			}
-// 			pconn = c
-// 		}()
-
-// 		return errc
-// 	}
-
-// 	pc1, pc2 := net.Pipe()
-// 	pipe := func() <-chan error {
-// 		errc := make(chan error, 1)
-
-// 		go func() {
-// 			defer close(errc)
-// 			defer pc1.Close()
-
-// 			errc <- s.Base.transport(s.conn, pc1)
-// 		}()
-
-// 		return errc
-// 	}
-
-// 	defer pc2.Close()
-
-// 	for {
-// 		select {
-// 		case err := <-accept():
-// 			if err != nil || pconn == nil {
-// 				log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
-// 				return
-// 			}
-// 			defer pconn.Close()
-
-// 			reply := gosocks5.NewReply(gosocks5.Succeeded, ToSocksAddr(pconn.RemoteAddr()))
-// 			if err := reply.Write(pc2); err != nil {
-// 				log.Printf("[socks5-bind] %s <- %s : %s\n", s.conn.RemoteAddr(), addr, err)
-// 			}
-// 			log.Printf("[socks5-bind] %s <- %s\n%s\n", s.conn.RemoteAddr(), addr, reply)
-// 			log.Printf("[socks5-bind] %s <- %s PEER %s ACCEPTED\n", s.conn.RemoteAddr(), socksAddr, pconn.RemoteAddr())
-
-// 			log.Printf("[socks5-bind] %s <-> %s\n", s.conn.RemoteAddr(), pconn.RemoteAddr())
-// 			if err = s.Base.transport(pc2, pconn); err != nil {
-// 				log.Println(err)
-// 			}
-// 			log.Printf("[socks5-bind] %s >-< %s\n", s.conn.RemoteAddr(), pconn.RemoteAddr())
-// 			return
-// 		case err := <-pipe():
-// 			log.Printf("[socks5-bind] %s -> %s : %v\n", s.conn.RemoteAddr(), addr, err)
-// 			ln.Close()
-// 			return
-// 		}
-// 	}
 // }
 
 // func (s *Socks5Server) transportUDP(relay, peer *net.UDPConn) (err error) {
