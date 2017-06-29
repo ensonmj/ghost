@@ -49,7 +49,6 @@ func (selector *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Con
 	switch method {
 	case MethodTLS:
 		conn = tls.Client(conn, selector.tlsConfig)
-
 	case gosocks5.MethodUserPass, MethodTLSAuth:
 		if method == MethodTLSAuth {
 			conn = tls.Client(conn, selector.tlsConfig)
@@ -191,6 +190,7 @@ func NewSocks5Server(pn *ProxyNode, pc *ProxyChain) *Socks5Server {
 				MethodTLS,
 				MethodTLSAuth,
 			},
+			user: pn.URL.User,
 		},
 	}
 }
@@ -223,8 +223,7 @@ func (n *Socks5Server) serveOnce(ln net.Listener) {
 
 	go func() {
 		log.Printf("[socks5] %s -> %s\n", conn.RemoteAddr(), conn.LocalAddr())
-		// conn := gosocks5.ServerConn(conn, n.selector)
-		conn := gosocks5.ServerConn(conn, nil)
+		conn := gosocks5.ServerConn(conn, n.selector)
 		req, err := gosocks5.ReadRequest(conn)
 		if err != nil {
 			log.Printf("[socks5]: %s\n", err)
@@ -330,7 +329,7 @@ func (n *Socks5ChainNode) Connect() (net.Conn, error) {
 }
 
 func (n *Socks5ChainNode) Handshake(c net.Conn) error {
-	return HandshakeForSocks5(c)
+	return HandshakeForSocks5(c, &n.pn.URL)
 }
 
 func (n *Socks5ChainNode) ForwardRequest(c net.Conn, url *url.URL) error {

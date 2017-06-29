@@ -29,7 +29,7 @@ type ChainNode interface {
 	ForwardRequest(c net.Conn, url *url.URL) error
 }
 
-func HandshakeForHttp(c net.Conn) error {
+func HandshakeForHttp(c net.Conn, url *url.URL) error {
 	log.Println("handshake with http node")
 	return nil
 }
@@ -45,7 +45,7 @@ func ForwardRequestByHttp(c net.Conn, url *url.URL) error {
 		Header:     make(http.Header),
 	}
 	req.Header.Set("Proxy-Connection", "keep-alive")
-	if authStr := encodeBasicAuth(url); authStr != "" {
+	if authStr := basicAuth(url); authStr != "" {
 		req.Header.Set("Proxy-Authorization", authStr)
 	}
 
@@ -68,22 +68,26 @@ func ForwardRequestByHttp(c net.Conn, url *url.URL) error {
 	return nil
 }
 
-func encodeBasicAuth(url *url.URL) string {
+func basicAuth(url *url.URL) string {
 	user := url.User
 	if user != nil {
 		s := user.String()
+		if _, set := user.Password(); !set {
+			s += ":"
+		}
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(s))
 	}
 	return ""
 }
 
-func HandshakeForSocks5(c net.Conn) error {
+func HandshakeForSocks5(c net.Conn, url *url.URL) error {
 	log.Println("handshake with socks5 node")
 	selector := &clientSelector{
 		methods: []uint8{
 			gosocks5.MethodNoAuth,
 			gosocks5.MethodUserPass,
 		},
+		user: url.User,
 	}
 	conn := gosocks5.ClientConn(c, selector)
 	if err := conn.Handleshake(); err != nil {

@@ -73,7 +73,7 @@ func (n *HttpChainNode) Connect() (net.Conn, error) {
 }
 
 func (n *HttpChainNode) Handshake(c net.Conn) error {
-	return HandshakeForHttp(c)
+	return HandshakeForHttp(c, &n.pn.URL)
 }
 
 func (n *HttpChainNode) ForwardRequest(c net.Conn, url *url.URL) error {
