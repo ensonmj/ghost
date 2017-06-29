@@ -10,7 +10,7 @@ import (
 func TestSocks5Server(t *testing.T) {
 	// socks5 proxy server
 	n, _ := ParseProxyNode("socks://127.0.0.1:8080")
-	proxySrv := NewSocks5Server(n)
+	proxySrv := NewSocks5Server(n, nil)
 	ln := proxySrv.listen()
 	defer ln.Close()
 	go proxySrv.serveOnce(ln)

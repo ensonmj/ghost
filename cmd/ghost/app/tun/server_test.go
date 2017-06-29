@@ -11,17 +11,16 @@ import (
 
 func TestHttpChainHttp(t *testing.T) {
 	// chained http proxy server
-	cn := NewHttpNode(&ProxyNode{})
+	cn := NewHttpServer(&ProxyNode{}, nil)
 	cproxySrv := httptest.NewServer(cn.GetHttpProxyHandler(true))
 	defer cproxySrv.Close()
 
 	// http proxy server with chain
-	pc, err := NewProxyChain(cproxySrv.URL)
+	pc, err := ParseProxyChain(cproxySrv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := NewHttpNode(&ProxyNode{})
-	n.pc = pc
+	n := NewHttpServer(&ProxyNode{}, pc)
 	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(true))
 	defer proxySrv.Close()
 
@@ -35,18 +34,17 @@ func TestHttpChainHttp(t *testing.T) {
 
 func TestSocksChainHttp(t *testing.T) {
 	// chained http proxy server
-	cn := NewHttpNode(&ProxyNode{})
+	cn := NewHttpServer(&ProxyNode{}, nil)
 	cproxySrv := httptest.NewServer(cn.GetHttpProxyHandler(true))
 	defer cproxySrv.Close()
 
 	// socks server with chain
-	pc, err := NewProxyChain(cproxySrv.URL)
+	pc, err := ParseProxyChain(cproxySrv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	n, _ := ParseProxyNode("socks://127.0.0.1:8080")
-	proxySrv := NewSocks5Server(n)
-	proxySrv.pc = pc
+	proxySrv := NewSocks5Server(n, pc)
 	ln := proxySrv.listen()
 	defer ln.Close()
 	go proxySrv.serveOnce(ln)
@@ -65,18 +63,17 @@ func TestSocksChainHttp(t *testing.T) {
 func TestHttpChainSocks(t *testing.T) {
 	// chained socks server
 	cn, _ := ParseProxyNode("socks://127.0.0.1:8080")
-	cproxySrv := NewSocks5Server(cn)
+	cproxySrv := NewSocks5Server(cn, nil)
 	ln := cproxySrv.listen()
 	defer ln.Close()
 	go cproxySrv.serveOnce(ln)
 
 	// http proxy server with chain
-	pc, err := NewProxyChain(cn.RawURL)
+	pc, err := NewProxyChain(cn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := NewHttpNode(&ProxyNode{})
-	n.pc = pc
+	n := NewHttpServer(&ProxyNode{}, pc)
 	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(true))
 	defer proxySrv.Close()
 

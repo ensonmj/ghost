@@ -52,7 +52,11 @@ func (n *QuicServer) String() string {
 
 func (n *QuicServer) Connect() (net.Conn, error) {
 	log.Printf("connect to chain first node: %s\n", n)
-	c, err := net.Dial("tcp", n.pn.URL.Host)
+
+	// cli := h2quic.NewClient(&h2quic.QuicRoundTripper{}, n.TLSConfig, n.pn.URL.Host)
+	// sess, err := quic.DialAddr(cli.hostname, cli.config)
+	// stream, err := sess.OpenStreamSync()
+	c, err := net.Dial("udp", n.pn.URL.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
 	}
@@ -77,9 +81,9 @@ func (n *QuicServer) ForwardRequest(c net.Conn, addr string) error {
 		Header:     make(http.Header),
 	}
 	req.Header.Set("Proxy-Connection", "keep-alive")
-	if authStr := n.pn.EncodeBasicAuth(); authStr != "" {
-		req.Header.Set("Proxy-Authorization", authStr)
-	}
+	// if authStr := n.pn.EncodeBasicAuth(); authStr != "" {
+	// 	req.Header.Set("Proxy-Authorization", authStr)
+	// }
 	if err := req.Write(c); err != nil {
 		return errors.Wrap(err, "forward request")
 	}

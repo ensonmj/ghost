@@ -3,12 +3,10 @@ package tun
 import (
 	"crypto/tls"
 	"log"
-	"net"
 )
 
 type LocalNode interface {
-	ListenAndServe(*ProxyChain) error
-	Dial(network, addr string) (net.Conn, error)
+	ListenAndServe() error
 }
 
 // ----------------------------------------------------------------------------
@@ -40,11 +38,9 @@ func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxySer
 	// 	// remote port forward: -L rtcp://:2222/192.168.1.1:22 -F socks://172.24.10.1:1080
 	// 	cn.Remote = strings.Trim(u.EscapedPath(), "/")
 	case "http":
-		n = NewHttpNode(pn)
+		n = NewHttpServer(pn, pc)
 	case "socks5":
-		n = NewSocks5Server(pn)
-	case "quic":
-		n = NewQuicServer(pn, config)
+		n = NewSocks5Server(pn, pc)
 	}
 
 	return &ProxyServer{
@@ -56,5 +52,5 @@ func NewProxyServer(pn *ProxyNode, pc *ProxyChain, config *tls.Config) *ProxySer
 
 func (s *ProxyServer) ListenAndServe() error {
 	log.Printf("proxy server starting: %s\n", s.ln)
-	return s.ln.ListenAndServe(s.pc)
+	return s.ln.ListenAndServe()
 }

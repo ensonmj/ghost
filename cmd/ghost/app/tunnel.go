@@ -48,7 +48,7 @@ func tunMain(cmd *cobra.Command, args []string) error {
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	// chain
-	pc, err := tun.NewProxyChain(fChainNodes...)
+	pc, err := tun.ParseProxyChain(fChainNodes...)
 	if err != nil {
 		return err
 	}

@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-func TestHttpProxyServer(t *testing.T) {
+func TestHttpServer(t *testing.T) {
 	// http proxy server
-	n := NewHttpNode(&ProxyNode{})
+	n := NewHttpServer(&ProxyNode{}, nil)
 	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(false))
 	defer proxySrv.Close()
 

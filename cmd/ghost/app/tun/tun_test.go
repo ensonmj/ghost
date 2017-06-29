@@ -49,8 +49,11 @@ func setupSrvAndClient(tr *http.Transport) error {
 	if err != nil {
 		return err
 	}
+	if resp.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("got %d:%s\n", resp.StatusCode, txt))
+	}
 	if string(txt) != "success" {
-		errors.New(fmt.Sprintf("expect success, but got %s\n", txt))
+		return errors.New(fmt.Sprintf("expect success, but got %s\n", txt))
 	}
 	return nil
 }

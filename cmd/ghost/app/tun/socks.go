@@ -180,9 +180,10 @@ type Socks5Server struct {
 	selector *serverSelector
 }
 
-func NewSocks5Server(pn *ProxyNode) *Socks5Server {
+func NewSocks5Server(pn *ProxyNode, pc *ProxyChain) *Socks5Server {
 	return &Socks5Server{
 		pn: pn,
+		pc: pc,
 		selector: &serverSelector{
 			methods: []uint8{
 				gosocks5.MethodNoAuth,
@@ -194,8 +195,7 @@ func NewSocks5Server(pn *ProxyNode) *Socks5Server {
 	}
 }
 
-func (n *Socks5Server) ListenAndServe(pc *ProxyChain) error {
-	n.pc = pc
+func (n *Socks5Server) ListenAndServe() error {
 	n.serve(n.listen())
 	return nil
 }
@@ -252,66 +252,8 @@ func (n *Socks5Server) serveOnce(ln net.Listener) {
 	}()
 }
 
-// Dial server or chain proxy
-func (n *Socks5Server) Dial(network, addr string) (net.Conn, error) {
-	return n.pc.Dial(network, addr)
-}
-
-func (n *Socks5Server) String() string {
-	return fmt.Sprintf("%s", n.pn)
-}
-
-func (n *Socks5Server) Connect() (net.Conn, error) {
-	log.Printf("connect to chain first node: %s\n", n)
-	c, err := net.Dial("tcp", n.pn.URL.Host)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return c, nil
-}
-
-func (n *Socks5Server) Handshake(c net.Conn) error {
-	log.Printf("handshake with chain node: %s in conn:%s -> %s\n", n,
-		c.LocalAddr(), c.RemoteAddr())
-	selector := &clientSelector{
-		methods: []uint8{
-			gosocks5.MethodNoAuth,
-			gosocks5.MethodUserPass,
-		},
-	}
-	conn := gosocks5.ClientConn(c, selector)
-	if err := conn.Handleshake(); err != nil {
-		return errors.Wrap(err, "handleshake")
-	}
-
-	return nil
-}
-
-func (n *Socks5Server) ForwardRequest(c net.Conn, addr string) error {
-	saddr, err := parseAddr(addr)
-	if err != nil {
-		return err
-	}
-	req := gosocks5.NewRequest(gosocks5.CmdConnect, saddr)
-	if err := req.Write(c); err != nil {
-		return errors.Wrap(err, "write socks connect")
-	}
-
-	resp, err := gosocks5.ReadReply(c)
-	log.Println("readReply")
-	if err != nil {
-		return errors.Wrap(err, "read socks reply")
-	}
-	if resp.Rep != gosocks5.Succeeded {
-		return errors.New("proxy refused connection")
-	}
-
-	return nil
-}
-
 func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {
-	cc, err := n.Dial("tcp", req.Addr.String())
+	cc, err := n.pc.Dial("tcp", req.Addr.String())
 	if err != nil {
 		log.Printf("[socks5-connect] %s -> %s : %s\n", c.RemoteAddr(), req.Addr, err)
 		rep := gosocks5.NewReply(gosocks5.HostUnreachable, nil)
@@ -332,6 +274,67 @@ func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {
 	log.Printf("[socks5-connect] %s <-> %s\n", c.RemoteAddr(), req.Addr)
 	Connect(cc, c)
 	log.Printf("[socks5-connect] %s >-< %s\n", c.RemoteAddr(), req.Addr)
+}
+
+func parseAddr(addr string) (*gosocks5.Addr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var typ uint8
+	if ip := net.ParseIP(host); ip == nil {
+		typ = gosocks5.AddrDomain
+	} else {
+		if ip4 := ip.To4(); ip4 != nil {
+			typ = gosocks5.AddrIPv4
+		} else {
+			typ = gosocks5.AddrIPv6
+		}
+	}
+
+	p, _ := strconv.Atoi(port)
+
+	return &gosocks5.Addr{
+		Type: typ,
+		Host: host,
+		Port: uint16(p),
+	}, nil
+}
+
+type Socks5ChainNode struct {
+	pn *ProxyNode
+}
+
+func NewSocks5ChainNode(pn *ProxyNode) *Socks5ChainNode {
+	return &Socks5ChainNode{
+		pn: pn,
+	}
+}
+
+func (n *Socks5ChainNode) String() string {
+	return fmt.Sprintf("%s", n.pn)
+}
+
+func (n *Socks5ChainNode) URL() *url.URL {
+	return &n.pn.URL
+}
+
+func (n *Socks5ChainNode) Connect() (net.Conn, error) {
+	c, err := net.Dial("tcp", n.pn.URL.Host)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return c, nil
+}
+
+func (n *Socks5ChainNode) Handshake(c net.Conn) error {
+	return HandshakeForSocks5(c)
+}
+
+func (n *Socks5ChainNode) ForwardRequest(c net.Conn, url *url.URL) error {
+	return ForwardRequestBySocks5(c, url)
 }
 
 // func (s *Socks5Server) handleBind(c net.Conn, req *gosocks5.Request) {
@@ -359,29 +362,6 @@ func (n *Socks5Server) handleConnect(c net.Conn, req *gosocks5.Request) {
 // 	s.Base.transport(s.conn, cc)
 // 	log.Printf("[socks5-bind] %s >-< %s\n", s.conn.RemoteAddr(), cc.RemoteAddr())
 // }
-
-func parseAddr(addr string) (*gosocks5.Addr, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	var typ uint8
-	if ip := net.ParseIP(host); ip == nil {
-		typ = gosocks5.AddrDomain
-	} else {
-		if ip4 := ip.To4(); ip4 != nil {
-			typ = gosocks5.AddrIPv4
-		} else {
-			typ = gosocks5.AddrIPv6
-		}
-	}
-	p, _ := strconv.Atoi(port)
-	return &gosocks5.Addr{
-		Type: typ,
-		Host: host,
-		Port: uint16(p),
-	}, nil
-}
 
 func Connect(c1, c2 net.Conn) {
 	errCh := make(chan error, 2)
