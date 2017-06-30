@@ -41,10 +41,7 @@ func TestSocksChainHttp(t *testing.T) {
 		t.Fatal(err)
 	}
 	n, _ := ParseProxyNode("socks://127.0.0.1:8080")
-	proxySrv := NewSocks5Server(n, pc)
-	ln := proxySrv.listen()
-	defer ln.Close()
-	go proxySrv.serveOnce(ln)
+	defer setupSocks5Server(n, pc).Close()
 
 	// http client transport
 	dialer, err := proxy.FromURL(&n.URL, proxy.Direct)
@@ -60,10 +57,7 @@ func TestSocksChainHttp(t *testing.T) {
 func TestHttpChainSocks(t *testing.T) {
 	// chained socks server
 	cn, _ := ParseProxyNode("socks://127.0.0.1:8080")
-	cproxySrv := NewSocks5Server(cn, nil)
-	ln := cproxySrv.listen()
-	defer ln.Close()
-	go cproxySrv.serveOnce(ln)
+	defer setupSocks5Server(cn, nil).Close()
 
 	// http proxy server with chain
 	pc, err := NewProxyChain(cn)

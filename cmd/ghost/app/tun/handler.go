@@ -35,7 +35,7 @@ type Socks5Handler interface {
 }
 
 func GetSocks5Handler(user *url.Userinfo,
-	dial func(network, addr string) (net.Conn, error)) Socks5Handler {
+	dial func(network, addr string) (net.Conn, error)) *socks5.Server {
 	dialCtx := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return dial(network, addr)
 	}

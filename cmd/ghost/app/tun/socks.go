@@ -5,13 +5,14 @@ import (
 	"net"
 	"net/url"
 
+	socks5 "github.com/ensonmj/go-socks5"
 	"github.com/pkg/errors"
 )
 
 type Socks5Server struct {
 	pn      *ProxyNode
 	pc      *ProxyChain
-	handler Socks5Handler
+	handler *socks5.Server
 }
 
 func NewSocks5Server(pn *ProxyNode, pc *ProxyChain) *Socks5Server {
@@ -23,34 +24,7 @@ func NewSocks5Server(pn *ProxyNode, pc *ProxyChain) *Socks5Server {
 }
 
 func (n *Socks5Server) ListenAndServe() error {
-	n.serve(n.listen())
-	return nil
-}
-
-func (n *Socks5Server) listen() net.Listener {
-	ln, err := net.Listen("tcp", n.pn.URL.Host)
-	if err != nil {
-		panic(errors.Wrap(err, "socks server listen"))
-	}
-	return ln
-}
-
-func (n *Socks5Server) serve(ln net.Listener) {
-	defer ln.Close()
-	for {
-		n.serveOnce(ln)
-	}
-}
-
-func (n *Socks5Server) serveOnce(ln net.Listener) {
-	conn, err := ln.Accept()
-	if err != nil {
-		return
-	}
-
-	go func() {
-		n.handler.ServeConn(conn)
-	}()
+	return n.handler.ListenAndServe("tcp", n.pn.URL.Host)
 }
 
 type Socks5ChainNode struct {
