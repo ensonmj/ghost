@@ -11,8 +11,7 @@ import (
 
 func TestHttpChainHttp(t *testing.T) {
 	// chained http proxy server
-	cn := NewHttpServer(&ProxyNode{}, nil)
-	cproxySrv := httptest.NewServer(cn.GetHttpProxyHandler(true))
+	cproxySrv := httptest.NewServer(GetHttpHandler(nil, true))
 	defer cproxySrv.Close()
 
 	// http proxy server with chain
@@ -20,8 +19,7 @@ func TestHttpChainHttp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := NewHttpServer(&ProxyNode{}, pc)
-	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(true))
+	proxySrv := httptest.NewServer(GetHttpHandler(pc.Dial, true))
 	defer proxySrv.Close()
 
 	// http client
@@ -34,8 +32,7 @@ func TestHttpChainHttp(t *testing.T) {
 
 func TestSocksChainHttp(t *testing.T) {
 	// chained http proxy server
-	cn := NewHttpServer(&ProxyNode{}, nil)
-	cproxySrv := httptest.NewServer(cn.GetHttpProxyHandler(true))
+	cproxySrv := httptest.NewServer(GetHttpHandler(nil, true))
 	defer cproxySrv.Close()
 
 	// socks server with chain
@@ -73,8 +70,7 @@ func TestHttpChainSocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := NewHttpServer(&ProxyNode{}, pc)
-	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(true))
+	proxySrv := httptest.NewServer(GetHttpHandler(pc.Dial, true))
 	defer proxySrv.Close()
 
 	// http client

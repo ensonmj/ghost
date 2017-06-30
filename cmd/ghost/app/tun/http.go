@@ -1,15 +1,11 @@
 package tun
 
 import (
-	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 
-	"github.com/elazarl/goproxy"
 	"github.com/pkg/errors"
 )
 
@@ -26,23 +22,7 @@ func NewHttpServer(pn *ProxyNode, pc *ProxyChain) *HttpServer {
 }
 
 func (n *HttpServer) ListenAndServe() error {
-	return http.ListenAndServe(n.pn.URL.Host, n.GetHttpProxyHandler(true))
-}
-
-func (n *HttpServer) GetHttpProxyHandler(verbose bool) http.Handler {
-	return &goproxy.ProxyHttpServer{
-		Tr: &http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-			MaxIdleConnsPerHost: 1000,
-			DisableKeepAlives:   true,
-			Dial:                n.pc.Dial,
-		},
-		NonproxyHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			http.Error(w, "This is a proxy server. Does not respond to non-proxy requests.", 500)
-		}),
-		Verbose: verbose,
-		Logger:  log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds),
-	}
+	return http.ListenAndServe(n.pn.URL.Host, GetHttpHandler(n.pc.Dial, true))
 }
 
 type HttpChainNode struct {

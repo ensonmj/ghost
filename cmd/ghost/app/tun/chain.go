@@ -3,6 +3,7 @@ package tun
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"io/ioutil"
 	"log"
@@ -118,6 +119,59 @@ func ForwardRequestBySocks5(c net.Conn, url *url.URL) error {
 	}
 
 	return nil
+}
+
+type clientSelector struct {
+	methods   []uint8
+	user      *url.Userinfo
+	tlsConfig *tls.Config
+}
+
+func (selector *clientSelector) Methods() []uint8 {
+	return selector.methods
+}
+
+func (selector *clientSelector) Select(methods ...uint8) (method uint8) {
+	return
+}
+
+func (selector *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, error) {
+	switch method {
+	case MethodTLS:
+		conn = tls.Client(conn, selector.tlsConfig)
+	case gosocks5.MethodUserPass, MethodTLSAuth:
+		if method == MethodTLSAuth {
+			conn = tls.Client(conn, selector.tlsConfig)
+		}
+
+		var username, password string
+		if selector.user != nil {
+			username = selector.user.Username()
+			password, _ = selector.user.Password()
+		}
+
+		req := gosocks5.NewUserPassRequest(gosocks5.UserPassVer, username, password)
+		if err := req.Write(conn); err != nil {
+			log.Println("socks5 auth:", err)
+			return nil, err
+		}
+		log.Println(req)
+
+		resp, err := gosocks5.ReadUserPassResponse(conn)
+		if err != nil {
+			log.Println("socks5 auth:", err)
+			return nil, err
+		}
+		log.Println(resp)
+
+		if resp.Status != gosocks5.Succeeded {
+			return nil, gosocks5.ErrAuthFailure
+		}
+	case gosocks5.MethodNoAcceptable:
+		return nil, gosocks5.ErrBadMethod
+	}
+
+	return conn, nil
 }
 
 // Proxy chain holds a list of proxy nodes

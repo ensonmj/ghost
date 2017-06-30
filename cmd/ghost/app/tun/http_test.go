@@ -9,8 +9,7 @@ import (
 
 func TestHttpServer(t *testing.T) {
 	// http proxy server
-	n := NewHttpServer(&ProxyNode{}, nil)
-	proxySrv := httptest.NewServer(n.GetHttpProxyHandler(false))
+	proxySrv := httptest.NewServer(GetHttpHandler(nil, false))
 	defer proxySrv.Close()
 
 	// http client
