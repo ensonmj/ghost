@@ -3,17 +3,17 @@ package tun
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"encoding/base64"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ginuerzh/gosocks5"
+	"github.com/ensonmj/gosocks5"
 	"github.com/pkg/errors"
 )
 
@@ -81,16 +81,9 @@ func basicAuth(url *url.URL) string {
 	return ""
 }
 
-func HandshakeForSocks5(c net.Conn, url *url.URL) error {
+func HandshakeForSocks5(c net.Conn, uri *url.URL) error {
 	log.Println("handshake with socks5 node")
-	selector := &clientSelector{
-		methods: []uint8{
-			gosocks5.MethodNoAuth,
-			gosocks5.MethodUserPass,
-		},
-		user: url.User,
-	}
-	conn := gosocks5.ClientConn(c, selector)
+	conn := gosocks5.ClientConn(c, gosocks5.NewAuthenticator([]*url.Userinfo{uri.User}))
 	if err := conn.Handleshake(); err != nil {
 		return errors.Wrap(err, "handleshake")
 	}
@@ -121,57 +114,30 @@ func ForwardRequestBySocks5(c net.Conn, url *url.URL) error {
 	return nil
 }
 
-type clientSelector struct {
-	methods   []uint8
-	user      *url.Userinfo
-	tlsConfig *tls.Config
-}
-
-func (selector *clientSelector) Methods() []uint8 {
-	return selector.methods
-}
-
-func (selector *clientSelector) Select(methods ...uint8) (method uint8) {
-	return
-}
-
-func (selector *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, error) {
-	switch method {
-	case MethodTLS:
-		conn = tls.Client(conn, selector.tlsConfig)
-	case gosocks5.MethodUserPass, MethodTLSAuth:
-		if method == MethodTLSAuth {
-			conn = tls.Client(conn, selector.tlsConfig)
-		}
-
-		var username, password string
-		if selector.user != nil {
-			username = selector.user.Username()
-			password, _ = selector.user.Password()
-		}
-
-		req := gosocks5.NewUserPassRequest(gosocks5.UserPassVer, username, password)
-		if err := req.Write(conn); err != nil {
-			log.Println("socks5 auth:", err)
-			return nil, err
-		}
-		log.Println(req)
-
-		resp, err := gosocks5.ReadUserPassResponse(conn)
-		if err != nil {
-			log.Println("socks5 auth:", err)
-			return nil, err
-		}
-		log.Println(resp)
-
-		if resp.Status != gosocks5.Succeeded {
-			return nil, gosocks5.ErrAuthFailure
-		}
-	case gosocks5.MethodNoAcceptable:
-		return nil, gosocks5.ErrBadMethod
+func parseAddr(addr string) (*gosocks5.Addr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	return conn, nil
+	var typ uint8
+	if ip := net.ParseIP(host); ip == nil {
+		typ = gosocks5.AddrDomain
+	} else {
+		if ip4 := ip.To4(); ip4 != nil {
+			typ = gosocks5.AddrIPv4
+		} else {
+			typ = gosocks5.AddrIPv6
+		}
+	}
+
+	p, _ := strconv.Atoi(port)
+
+	return &gosocks5.Addr{
+		Type: typ,
+		Host: host,
+		Port: uint16(p),
+	}, nil
 }
 
 // Proxy chain holds a list of proxy nodes

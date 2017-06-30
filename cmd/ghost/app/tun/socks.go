@@ -49,7 +49,7 @@ func (n *Socks5Server) serveOnce(ln net.Listener) {
 	}
 
 	go func() {
-		n.handler.ServeSocks5(conn)
+		n.handler.ServeConn(conn)
 	}()
 }
 
