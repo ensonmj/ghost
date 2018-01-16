@@ -52,14 +52,14 @@ func tunMain(cmd *cobra.Command, args []string) error {
 	for _, strNode := range fLocalNodes {
 		srv, err := proxy.NewServer(strNode, fChainNodes...)
 		if err != nil {
-			log.Println(err)
+			log.Printf("%+v\n", err)
 			continue
 		}
 
 		wg.Add(1)
 		go func(srv *proxy.Server) {
 			defer wg.Done()
-			srv.ListenAndServe()
+			log.Printf("%+v\n", srv.ListenAndServe())
 		}(srv)
 	}
 	wg.Wait()
